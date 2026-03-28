@@ -1,0 +1,206 @@
+%% CS505 Final Project Proposal
+%% Single-column proposal format (ACL format reserved for midway/final reports)
+%% Compile: pdflatex → bibtex → pdflatex → pdflatex
+
+\documentclass[10pt,letterpaper]{article}
+
+%% ── Packages ──────────────────────────────────────────────────────────────────
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{times}
+\usepackage[top=0.9in, bottom=0.9in, left=1in, right=1in]{geometry}
+\usepackage{natbib}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{parskip}
+
+\makeatletter
+\renewcommand{\section}{\@startsection{section}{1}{\z@}%
+  {7pt \@plus 1pt \@minus 1pt}{2pt}%
+  {\normalfont\normalsize\bfseries}}
+\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}%
+  {4pt \@plus 1pt}{1.5pt}%
+  {\normalfont\normalsize\itshape}}
+\makeatother
+\setlength{\parskip}{3.5pt}
+\setlength{\parindent}{0pt}
+\bibsep=2.5pt
+
+%% ── Title ─────────────────────────────────────────────────────────────────────
+\title{\vspace{-1.5em}%
+  \textbf{Reducing Hallucinations via Citation-Grounded QA
+  with Locally-Hosted Small Language Models}\\[3pt]
+  {\normalsize\normalfont
+   CS505 Natural Language Processing \enspace|\enspace
+   Final Project Proposal \enspace|\enspace Boston University}\\[1pt]
+  {\normalsize\normalfont [We will add names here :)]}%
+}
+\date{\vspace{-1.5em}}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+%% ── Preamble ─────────────────────────────────────────────────────────────────
+\noindent\textbf{Project type:}
+Empirical NLP project focused on retrieval-augmented generation (RAG) for
+hallucination reduction.
+
+\noindent\textbf{Research question:}
+\emph{How much of the hallucination gap between a locally-hosted small language
+model (SLM) and GPT-4o is attributable to retrieval quality versus generation
+capacity—and can systematic retrieval improvements make fully local,
+privacy-preserving deployment practically viable?}
+
+%% ── 1. Problem Statement ─────────────────────────────────────────────────────
+\section{Problem Statement \& Motivation}
+
+Hallucination—generating claims unsupported by source documents—is the
+primary failure mode of LLMs in high-stakes settings.
+Cloud tools like Google's NotebookLM answer questions over private documents
+with inline citations, but require transmitting the entire corpus to an
+external server, violating HIPAA, GDPR, and corporate data-governance
+policies.
+\textbf{Cloud upload equals data-exfiltration risk.}
+Sub-7B SLMs (e.g., Phi-3-mini-3.8B \citep{microsoft2024phi3}) can run on a
+single consumer GPU, but it is unclear whether their higher hallucination rate
+stems from \emph{retrieval failures} or \emph{generation failures}.
+If retrieval improvements close most of the gap, local deployment becomes a
+practical alternative.
+
+\textbf{Task definition.}
+Given a corpus $\mathcal{C}=\{d_1,\ldots,d_n\}$ and query $q$, the system
+produces answer $a$ plus, for every sentence $s_i\in a$, a citation
+$(p_i, s_i)$ where passage $p_i\in\mathcal{C}$ textually entails $s_i$.
+Any sentence without a valid citation is counted as a hallucination.
+
+%% ── 2. Proposed System ───────────────────────────────────────────────────────
+\section{Proposed System}
+
+All components run locally (no API calls except the GPT-4o oracle).
+
+\textbf{Parsing.}  PyMuPDF; preserves section headings for structure-aware
+chunking.
+
+\textbf{Chunking (ablated).}  Three strategies: fixed-size (256 tok, 32
+overlap), sliding-window (512 tok, 128 overlap), section-aware
+(boundary-aligned).
+
+\textbf{Retrieval (ablated).}  Dense-only (FAISS + BGE-small-en-v1.5
+\citep{xiao2023bge}); BM25 (rank-bm25); hybrid reciprocal-rank fusion (RRF);
+hybrid + cross-encoder reranking (ms-marco-MiniLM-L-6-v2), top-5 passages.
+
+\textbf{Generation.}  Two prompt variants: standard generation (no citation
+instruction) vs.\ \emph{citation-forcing} (the model must bracket every claim
+with an inline citation and assert only what the retrieved passages support).
+Served via Ollama; $\leq$16 GB VRAM.
+
+%% ── 3. Experimental Design ───────────────────────────────────────────────────
+\section{Experimental Design}
+
+\subsection{Conditions}
+
+Each condition changes exactly one component (Table~\ref{tab:ablation}).
+Conditions A--E are the committed core; F and G are stretch goals.
+
+\begin{table}[h]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}clllcc@{}}
+\toprule
+\textbf{Cond.} & \textbf{Chunk} & \textbf{Retrieval} &
+\textbf{Rerank} & \textbf{Cite-force} & \textbf{Generator} \\
+\midrule
+A (base) & Fixed   & Dense  & $\times$   & $\times$   & Phi-3-mini \\
+B        & Fixed   & Hybrid & $\times$   & $\times$   & Phi-3-mini \\
+C        & Section & Hybrid & $\times$   & $\times$   & Phi-3-mini \\
+D        & Section & Hybrid & \checkmark & $\times$   & Phi-3-mini \\
+E (best) & Section & Hybrid & \checkmark & \checkmark & Phi-3-mini \\
+\midrule
+F$^*$    & Section & Hybrid & \checkmark & \checkmark & Llama-3-8B \\
+G$^*$    & Section & Hybrid & \checkmark & \checkmark & GPT-4o (oracle) \\
+\bottomrule
+\end{tabular}
+\caption{Ablation conditions. $^*$Stretch goals (time permitting).}
+\label{tab:ablation}
+\end{table}
+
+\subsection{Dataset \& Baselines}
+
+\textbf{Dataset:} QASPER \citep{dasigi2021qasper}—1,585 full-text NLP papers,
+5,049 Q\&A pairs with gold evidence annotations.
+Supports both retrieval evaluation and answer evaluation (official token F1).
+
+\textbf{Baselines:}
+(1)~\textbf{Parametric-only LM}—Phi-3-mini with no retrieval, establishing
+the hallucination floor.
+(2)~\textbf{BM25-only}—sparse keyword retrieval, the simplest retrieval
+baseline.
+
+\subsection{Metrics \& Hypothesis}
+
+Retrieval: Recall@5, MRR@10, evidence hit rate.
+Answer: Token F1 (QASPER official).
+Faithfulness: RAGAS \citep{es2023ragas}.
+Citation precision: NLI entailment (TRUE \citep{honovich2022true}).
+
+\textbf{Hypothesis:} Retrieval improvements (A$\to$D) will reduce hallucination
+more than citation-forcing alone (D$\to$E), identifying retrieval as the
+primary bottleneck; section-aware chunking will boost citation precision.
+
+%% ── 4. Related Work ──────────────────────────────────────────────────────────
+\section{Related Work}
+
+\citet{lewis2020rag} introduced RAG; \citet{rashkin2023ais} and
+\citet{gao2023alce} defined attribution evaluation.
+RAGAS \citep{es2023ragas} automates faithfulness scoring.
+\citet{ajith2024litsearch} motivates hybrid retrieval for scientific text;
+\citet{asai2024openscholar} is the closest prior system.
+Our contribution—a local-SLM ablation disentangling retrieval from generation
+failures—is absent from all prior work.
+
+%% ── 5. Feasibility & Timeline ────────────────────────────────────────────────
+\section{Feasibility \& Timeline}
+
+\textbf{Scope.}
+The committed core (A--E on QASPER with Phi-3-mini) builds the retrieval
+pipeline incrementally—one component per week—and is realistic on a single
+consumer GPU.
+Stretch goals (F, G, embedding ablation, human eval) will be attempted in
+week 5 and deferred to the final report if time is short.
+
+\begin{table}[h]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{@{}cp{9cm}@{}}
+\toprule
+\textbf{Wk} & \textbf{Milestone} \\
+\midrule
+1--2 & Parsing, chunking strategies, BM25 + dense baseline (cond.\ A) \\
+3    & Hybrid RRF + reranking; conditions B--D; QASPER eval pipeline \\
+4    & Citation-forcing (E); RAGAS + NLI evaluation; error analysis \\
+5    & Midway report; begin stretch goals (F, G) if on schedule \\
+6    & Final ablation, writeup (ACL format), GitHub release (MIT) \\
+\bottomrule
+\end{tabular}
+\caption{Six-week schedule. Core scope: weeks 1--4 (conditions A--E).}
+\end{table}
+
+\noindent\textbf{Stack:} PyMuPDF, sentence-transformers, FAISS, rank-bm25,
+Ollama, RAGAS, HuggingFace Transformers; MIT license; no paid API for core scope.
+
+%% ── References ───────────────────────────────────────────────────────────────
+{\footnotesize
+\bibliographystyle{abbrvnat}
+\bibliography{references}
+}
+
+\end{document}
