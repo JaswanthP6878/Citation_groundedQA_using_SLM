@@ -1,4 +1,4 @@
 # DS_Store thing ignored
-**/DS_Store
+.DS_Store
 # any supposed pycaches ignored
 **/__pycache__/*
