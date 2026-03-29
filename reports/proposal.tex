@@ -51,10 +51,10 @@ Empirical NLP project focused on retrieval-augmented generation (RAG) for
 hallucination reduction.
 
 \noindent\textbf{Research question:}
-\emph{How much of the hallucination gap between a locally-hosted small language
-model (SLM) and GPT-4o is attributable to retrieval quality versus generation
-capacity—and can systematic retrieval improvements make fully local,
-privacy-preserving deployment practically viable?}
+\emph{Within a fully local, privacy-preserving RAG system, how much of a
+sub-7B SLM's hallucination rate is attributable to retrieval quality versus
+generation capacity—and can systematic retrieval improvements make small
+local models practically reliable for citation-grounded QA over private corpora?}
 
 %% ── 1. Problem Statement ─────────────────────────────────────────────────────
 \section{Problem Statement \& Motivation}
@@ -67,10 +67,9 @@ external server, violating HIPAA, GDPR, and corporate data-governance
 policies.
 \textbf{Cloud upload equals data-exfiltration risk.}
 Sub-7B SLMs (e.g., Phi-3-mini-3.8B \citep{microsoft2024phi3}) can run on a
-single consumer GPU, but it is unclear whether their higher hallucination rate
-stems from \emph{retrieval failures} or \emph{generation failures}.
-If retrieval improvements close most of the gap, local deployment becomes a
-practical alternative.
+single consumer GPU, but it is unclear whether their hallucination rate
+stems primarily from \emph{retrieval failures} or \emph{generation failures}.
+Disentangling the two is the key to principled, cost-effective improvement.
 
 \textbf{Task definition.}
 Given a corpus $\mathcal{C}=\{d_1,\ldots,d_n\}$ and query $q$, the system
@@ -81,7 +80,7 @@ Any sentence without a valid citation is counted as a hallucination.
 %% ── 2. Proposed System ───────────────────────────────────────────────────────
 \section{Proposed System}
 
-All components run locally (no API calls except the GPT-4o oracle).
+All components run locally; no external API calls are required.
 
 \textbf{Parsing.}  PyMuPDF; preserves section headings for structure-aware
 chunking.
@@ -107,7 +106,8 @@ to constrained decoding (Guidance or Outlines) to enforce the schema at the toke
 \subsection{Conditions}
 
 Each condition changes exactly one component (Table~\ref{tab:ablation}).
-Conditions A--E are the committed core; F and G are stretch goals.
+Conditions A--E are the committed core; F and G (both local) are stretch goals
+testing whether retrieval improvements generalize across model families.
 
 \begin{table}[h]
 \centering
@@ -126,7 +126,7 @@ D        & Section & Hybrid & \checkmark & $\times$   & Phi-3-mini \\
 E (best) & Section & Hybrid & \checkmark & \checkmark & Phi-3-mini \\
 \midrule
 F$^*$    & Section & Hybrid & \checkmark & \checkmark & Llama-3-8B \\
-G$^*$    & Section & Hybrid & \checkmark & \checkmark & GPT-4o (oracle) \\
+G$^*$    & Section & Hybrid & \checkmark & \checkmark & Mistral-7B \\
 \bottomrule
 \end{tabular}
 \caption{Ablation conditions. $^*$Stretch goals (time permitting).}
@@ -151,8 +151,9 @@ the mere presence of context.
 \subsection{Metrics \& Hypothesis}
 
 Retrieval: Recall@5, MRR@10, evidence hit rate.
-Answer: Token F1 (QASPER official).
-Faithfulness: RAGAS \citep{es2023ragas}.
+Answer: Token F1 (QASPER official) and BERTScore (reference-free semantic similarity).
+Faithfulness: RAGAS \citep{es2023ragas} with Llama-3-8B as the local
+evaluator judge (served via Ollama), eliminating any external API dependency.
 Citation precision: NLI entailment (TRUE cross-encoder), supplemented by a
 lightweight human evaluation on 20--30 sampled QA pairs to guard against
 NLI model biases.
@@ -178,7 +179,7 @@ both works and from the broader attribution evaluation literature.
 The committed core (A--E on QASPER with Phi-3-mini) builds the retrieval
 pipeline incrementally—one component per week—and is realistic on a single
 consumer GPU.
-Stretch goals (F, G, embedding ablation, human eval) will be attempted in
+Stretch goals (F: Llama-3-8B, G: Mistral-7B) will be attempted in
 week 5 and deferred to the final report if time is short.
 
 \begin{table}[h]
