@@ -2,7 +2,7 @@
 %% Single-column proposal format (ACL format reserved for midway/final reports)
 %% Compile: pdflatex → bibtex → pdflatex → pdflatex
 
-\documentclass[10pt,letterpaper]{article}
+\documentclass[11pt,letterpaper]{article}
 
 %% ── Packages ──────────────────────────────────────────────────────────────────
 \usepackage[T1]{fontenc}
@@ -20,15 +20,15 @@
 
 \makeatletter
 \renewcommand{\section}{\@startsection{section}{1}{\z@}%
-  {7pt \@plus 1pt \@minus 1pt}{2pt}%
+  {5pt \@plus 1pt \@minus 1pt}{1.5pt}%
   {\normalfont\normalsize\bfseries}}
 \renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}%
-  {4pt \@plus 1pt}{1.5pt}%
+  {3pt \@plus 1pt}{1pt}%
   {\normalfont\normalsize\itshape}}
 \makeatother
-\setlength{\parskip}{3.5pt}
+\setlength{\parskip}{2.5pt}
 \setlength{\parindent}{0pt}
-\bibsep=2.5pt
+\bibsep=2pt
 
 %% ── Title ─────────────────────────────────────────────────────────────────────
 \title{\vspace{-1.5em}%
@@ -90,14 +90,16 @@ chunking.
 overlap), sliding-window (512 tok, 128 overlap), section-aware
 (boundary-aligned).
 
-\textbf{Retrieval (ablated).}  Dense-only (FAISS + BGE-small-en-v1.5
-\citep{xiao2023bge}); BM25 (rank-bm25); hybrid reciprocal-rank fusion (RRF);
-hybrid + cross-encoder reranking (ms-marco-MiniLM-L-6-v2), top-5 passages.
+\textbf{Retrieval (ablated).}  Dense-only (FAISS + BGE-small-en-v1.5);
+BM25 (rank-bm25); hybrid reciprocal-rank fusion (RRF); hybrid +
+cross-encoder reranking (ms-marco-MiniLM-L-6-v2), top-5 passages.
 
 \textbf{Generation.}  Two prompt variants: standard generation (no citation
 instruction) vs.\ \emph{citation-forcing} (the model must bracket every claim
 with an inline citation and assert only what the retrieved passages support).
 Served via Ollama; $\leq$16 GB VRAM.
+If Phi-3-mini fails to follow the bracket format consistently, we will fall back
+to constrained decoding (Guidance or Outlines) to enforce the schema at the token level.
 
 %% ── 3. Experimental Design ───────────────────────────────────────────────────
 \section{Experimental Design}
@@ -133,22 +135,27 @@ G$^*$    & Section & Hybrid & \checkmark & \checkmark & GPT-4o (oracle) \\
 
 \subsection{Dataset \& Baselines}
 
-\textbf{Dataset:} QASPER \citep{dasigi2021qasper}—1,585 full-text NLP papers,
-5,049 Q\&A pairs with gold evidence annotations.
-Supports both retrieval evaluation and answer evaluation (official token F1).
+\textbf{Dataset:} QASPER \citep{dasigi2021qasper}—1,585 NLP papers,
+5,049 Q\&A pairs with gold evidence annotations supporting both
+retrieval and answer evaluation (official token F1).
 
 \textbf{Baselines:}
 (1)~\textbf{Parametric-only LM}—Phi-3-mini with no retrieval, establishing
 the hallucination floor.
 (2)~\textbf{BM25-only}—sparse keyword retrieval, the simplest retrieval
 baseline.
+(3)~\textbf{Random Retrieval}—five passages sampled uniformly at random,
+confirming that RRF gains reflect retrieval \emph{quality} rather than
+the mere presence of context.
 
 \subsection{Metrics \& Hypothesis}
 
 Retrieval: Recall@5, MRR@10, evidence hit rate.
 Answer: Token F1 (QASPER official).
 Faithfulness: RAGAS \citep{es2023ragas}.
-Citation precision: NLI entailment (TRUE \citep{honovich2022true}).
+Citation precision: NLI entailment (TRUE cross-encoder), supplemented by a
+lightweight human evaluation on 20--30 sampled QA pairs to guard against
+NLI model biases.
 
 \textbf{Hypothesis:} Retrieval improvements (A$\to$D) will reduce hallucination
 more than citation-forcing alone (D$\to$E), identifying retrieval as the
@@ -157,13 +164,12 @@ primary bottleneck; section-aware chunking will boost citation precision.
 %% ── 4. Related Work ──────────────────────────────────────────────────────────
 \section{Related Work}
 
-\citet{lewis2020rag} introduced RAG; \citet{rashkin2023ais} and
-\citet{gao2023alce} defined attribution evaluation.
-RAGAS \citep{es2023ragas} automates faithfulness scoring.
-\citet{ajith2024litsearch} motivates hybrid retrieval for scientific text;
-\citet{asai2024openscholar} is the closest prior system.
-Our contribution—a local-SLM ablation disentangling retrieval from generation
-failures—is absent from all prior work.
+\citet{lewis2020rag} introduced RAG and remains the canonical reference for
+retrieval-augmented generation; \citet{asai2024openscholar} is the closest
+prior system, applying RAG to scientific literature synthesis.
+Our contribution—a controlled ablation on a locally-hosted SLM that
+disentangles retrieval failures from generation failures—is absent from
+both works and from the broader attribution evaluation literature.
 
 %% ── 5. Feasibility & Timeline ────────────────────────────────────────────────
 \section{Feasibility \& Timeline}
@@ -188,14 +194,14 @@ week 5 and deferred to the final report if time is short.
 3    & Hybrid RRF + reranking; conditions B--D; QASPER eval pipeline \\
 4    & Citation-forcing (E); RAGAS + NLI evaluation; error analysis \\
 5    & Midway report; begin stretch goals (F, G) if on schedule \\
-6    & Final ablation, writeup (ACL format), GitHub release (MIT) \\
+6    & Final ablation, writeup (ACL format) \\
 \bottomrule
 \end{tabular}
 \caption{Six-week schedule. Core scope: weeks 1--4 (conditions A--E).}
 \end{table}
 
 \noindent\textbf{Stack:} PyMuPDF, sentence-transformers, FAISS, rank-bm25,
-Ollama, RAGAS, HuggingFace Transformers; MIT license; no paid API for core scope.
+Ollama, RAGAS, HuggingFace Transformers; no paid API for core scope.
 
 %% ── References ───────────────────────────────────────────────────────────────
 {\footnotesize
