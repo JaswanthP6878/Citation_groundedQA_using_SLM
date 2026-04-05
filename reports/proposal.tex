@@ -47,25 +47,20 @@ Empirical NLP project focused on retrieval-augmented generation (RAG) for
 hallucination reduction.
 
 \noindent\textbf{Research question:}
-\emph{Within a fully local, privacy preserving RAG system, how much of a
+\emph{Within a fully local, privacy-preserving RAG system, how much of a
 sub-7B SLM's hallucination rate is attributable to retrieval quality versus
-generation capacity and can systematic retrieval improvements make small
-local models practically reliable for citation-grounded QA over private corpora?}
+generation capacity?}
 
 %% ── 1. Problem Statement ─────────────────────────────────────────────────────
 \section{Problem Statement \& Motivation}
 
 Hallucination generating claims unsupported by source documents is the
-primary failure mode of LLMs in high stakes settings.
-Cloud tools like Google's NotebookLM answer questions over private documents
-with inline citations, but require transmitting the entire corpus to an
-external server, which may be incompatible with HIPAA/GDPR requirements
-or internal data governance policies.
+primary failure mode of LLMs in high-stakes settings.
+Cloud tools like Google's NotebookLM require transmitting corpora to external
+servers, conflicting with HIPAA/GDPR requirements.
 \textbf{Cloud upload equals data exfiltration risk.}
 Sub-7B SLMs (e.g., Phi-3-mini-3.8B \citep{microsoft2024phi3}) can run on a
-single consumer GPU, but it is unclear whether their hallucination rate
-stems primarily from \emph{retrieval failures} or \emph{generation failures}.
-Disentangling the two is the key to principled, cost effective improvement.
+single consumer GPU, making local deployment feasible.
 
 \textbf{Task definition.}
 Given a corpus $\mathcal{C}=\{d_1,\ldots,d_n\}$ and query $q$, the system
@@ -79,39 +74,33 @@ Any sentence without a valid citation is counted as a hallucination.
 All components run locally; no external API calls are required.
 
 \textbf{Parsing.}  QASPER provides structured JSON with section boundaries,
-which we load directly; this eliminates PDF parsing noise as a confounding
-variable and isolates retrieval and generation as the sole experimental
-factors. In deployment on private corpora, PyMuPDF would replace this step.
+which we load directly.
 
-\textbf{Chunking (ablated).}  Three strategies: fixed size (256 tok, 32
-overlap), sliding window (512 tok, 128 overlap), section aware
-(boundary aligned, capped at 512 tokens to prevent oversized chunks).
+\textbf{Chunking (ablated).}  Three strategies: fixed-size (256 tok, 32 overlap),
+sliding window (512 tok, 128 overlap), and section-aware
+(boundary-aligned, capped at 512 tokens).
 
 \textbf{Retrieval (ablated).}  Dense only (FAISS + BGE-small-en-v1.5);
 BM25 (rank-bm25); hybrid reciprocal-rank fusion (RRF); hybrid +
-cross encoder reranking (ms-marco-MiniLM-L-6-v2), top-5 passages.
+cross-encoder reranking (ms-marco-MiniLM-L-6-v2), top-5 passages.
 
-\textbf{Generation.}  Two prompt variants: standard generation (no citation
-instruction) vs.\ \emph{citation forcing} (the model must bracket every claim
-with an inline citation and assert only what the retrieved passages support).
+\textbf{Generation.}  Two prompt variants: standard generation vs.\
+\emph{citation forcing}, where the model must bracket every claim with an
+inline citation and assert only what the retrieved passages support.
 Served via Ollama; $\leq$16 GB VRAM.
-If Phi-3-mini fails to follow the bracket format consistently, we will fall back
-to constrained decoding (Guidance or Outlines) to enforce the schema at the token level.
 
 %% ── 3. Experimental Design ───────────────────────────────────────────────────
 \section{Experimental Design}
 
 \subsection{Conditions}
 
-Each condition changes exactly one component (Table~\ref{tab:ablation}).
-Conditions A to E are the committed core; F and G (both local) are stretch goals
-testing whether retrieval improvements generalize across model families.
+Each condition changes exactly one component (Table~\ref{tab:ablation}); F and G are stretch goals.
 
 \begin{table}[H]
 \centering
 \small
 \setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.1}
+\renewcommand{\arraystretch}{1.0}
 \begin{tabular}{@{}clllcc@{}}
 \toprule
 \textbf{Cond.} & \textbf{Chunk} & \textbf{Retrieval} &
@@ -133,66 +122,27 @@ G$^*$    & Section & Hybrid & \checkmark & \checkmark & Mistral-7B \\
 
 \subsection{Dataset \& Baselines}
 
-\textbf{Dataset:} QASPER \citep{dasigi2021qasper}—1,585 NLP papers,
+\textbf{Dataset:} QASPER \citep{dasigi2021qasper} 1,585 NLP papers,
 5,049 Q\&A pairs with gold evidence annotations supporting both
 retrieval and answer evaluation (official token F1).
-Evidence annotations are treated as approximate grounding signals;
-NLI and token overlap together compensate for annotation incompleteness.
-We use QASPER as a controlled benchmark for citation grounded QA; our
-target deployment is private corpora where gold annotated evaluation
-of this kind is not feasible.
 
-\textbf{Baselines:}
-(1)~\textbf{Parametric only LM}: Phi-3-mini with no retrieval, establishing
-the hallucination floor.
-(2)~\textbf{BM25 only} sparse keyword retrieval, the simplest retrieval
-baseline.
-(3)~\textbf{Random Retrieval}: five passages sampled uniformly at random,
-confirming that RRF gains reflect retrieval \emph{quality} rather than
-the mere presence of context.
+\textbf{Baselines:} (1)~Parametric-only Phi-3-mini; (2)~BM25-only; (3)~Random retrieval (5 passages).
 
 \subsection{Metrics \& Hypothesis}
 
-We treat citation precision as the primary measure of faithfulness;
-all other metrics serve as supporting signals or retrieval diagnostics.
-
-\textbf{Primary:} Citation precision via NLI entailment (TRUE cross encoder)
-and hallucination rate; logs \% sentences with valid citations and
-\% malformed citation format outputs per condition.
+\textbf{Primary:} Citation precision via NLI entailment (TRUE cross encoder) and hallucination rate.
 \textbf{Secondary:} Token F1 (QASPER official), BERTScore.
-\textbf{Faithfulness signal:} RAGAS \citep{es2023ragas} with Llama-3-8B as
-local judge (Ollama)—supporting signal only, to avoid LLM-judges-LLM circularity.
-\textbf{Retrieval diagnostics:} Recall@5, MRR@10, evidence hit rate.
-\textbf{Validation:} Human evaluation on 20 to 30 sampled QA pairs as tie breaker.
-
-We will additionally plot hallucination rate against Recall@5 across conditions
-and stratify results by whether gold evidence was retrieved, directly attributing
-failures to retrieval versus generation.
+\textbf{Faithfulness:} RAGAS \citep{es2023ragas} (Llama-3-8B local judge).
+\textbf{Retrieval:} Recall@5, MRR@10, evidence hit rate.
 
 \textbf{Hypothesis:} Retrieval improvements (A$\to$D) will account for the
 majority of hallucination reduction, with citation forcing (D$\to$E) providing
-a smaller incremental gain; the retrieval hallucination correlation will show
-a marked increase in faithfulness once Recall@5 crosses a threshold value.
+a smaller incremental gain; results will be stratified by whether gold evidence
+was retrieved to attribute failures to retrieval vs.\ generation.
 
-%% ── 4. Related Work ──────────────────────────────────────────────────────────
-\section{Related Work}
 
-\citet{lewis2020rag} introduced RAG and remains the canonical reference for
-retrieval augmented generation; \citet{asai2024openscholar} is the closest
-prior system, applying RAG to scientific literature synthesis.
-Our contribution, a controlled ablation on a locally hosted SLM that
-disentangles retrieval failures from generation failures is absent from
-both works and from the broader attribution evaluation literature.
-
-%% ── 5. Feasibility & Timeline ────────────────────────────────────────────────
+%% ── 4. Feasibility & Timeline ────────────────────────────────────────────────
 \section{Feasibility \& Timeline}
-
-\textbf{Scope.}
-The committed core (A to E on QASPER with Phi-3-mini) builds the retrieval
-pipeline incrementally one component per week and is realistic on a single
-consumer GPU.
-Stretch goals (F: Llama-3-8B, G: Mistral-7B) will be attempted in
-week 5 and deferred to the final report if time is short.
 
 \begin{table}[H]
 \centering
@@ -210,7 +160,7 @@ week 5 and deferred to the final report if time is short.
 6    & Final ablation, writeup (ACL format) \\
 \bottomrule
 \end{tabular}
-\caption{Six week schedule. Core scope: weeks 1 -> 4 (conditions A to E).}
+\caption{Six week schedule. Core scope: weeks 1--4 (conditions A--E).}
 \end{table}
 
 \noindent\textbf{Stack:} sentence-transformers, FAISS, rank-bm25,
