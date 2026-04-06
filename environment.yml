@@ -1,0 +1,25 @@
+name: rag_env
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+  - pip
+
+  # Core
+  - numpy
+  - tqdm
+
+  # PyTorch (GPU)
+  - pytorch
+  - pytorch-cuda=11.8
+
+  - pip:
+      - transformers
+      - accelerate
+      - sentence-transformers
+      - datasets
+      - faiss-cpu
+      - rank-bm25
