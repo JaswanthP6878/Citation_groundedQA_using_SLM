@@ -11,7 +11,7 @@ else
     conda env create -n $ENV_NAME -f environment.yml
 fi
 
-conda activate $ENV_PATH
+conda activate $ENV_NAME
 
 export HF_HOME=/projectnb/cs505am/materials/.cache/huggingface/
 
