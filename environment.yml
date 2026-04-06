@@ -8,13 +8,10 @@ dependencies:
   - python=3.10
   - pip
 
-  # Core
   - numpy
   - tqdm
 
-  # PyTorch (GPU)
   - pytorch
-  - pytorch-cuda=11.8
 
   - pip:
       - transformers
