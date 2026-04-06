@@ -2,7 +2,7 @@
 
 module load miniconda
 
-ENV_NAME = "rag_env"
+ENV_NAME="rag_env"
 
 if conda env list | grep -q "$ENV_NAME"; then
     echo "Environment already exists."
