@@ -2,13 +2,13 @@
 
 module load miniconda
 
-ENV_PATH="/projectnb/cs505am/students/$USER/envs/rag_env"
+ENV_NAME = "rag_env"
 
-if [ -d "$ENV_PATH" ]; then
+if conda env list | grep -q "$ENV_NAME"; then
     echo "Environment already exists."
 else
     echo "Creating environment..."
-    conda env create -p $ENV_PATH -f environment.yml
+    conda env create -n $ENV_NAME -f environment.yml
 fi
 
 conda activate $ENV_PATH
