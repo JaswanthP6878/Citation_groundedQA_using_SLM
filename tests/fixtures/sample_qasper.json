@@ -1,0 +1,137 @@
+{
+  "paper-1": {
+    "title": "Compact Scientific QA",
+    "abstract": "This paper introduces a compact recurrent encoder for scientific question answering.",
+    "full_text": {
+      "section_name": [
+        "Introduction",
+        "Method ::: Encoder",
+        "Results"
+      ],
+      "paragraphs": [
+        [
+          "Question answering over papers needs reliable retrieval.",
+          "Section boundaries help preserve evidence."
+        ],
+        [
+          "The encoder uses recurrent layers with attention pooling.",
+          "We train with span supervision and paragraph evidence."
+        ],
+        [
+          "Performance improves on QASPER."
+        ]
+      ]
+    },
+    "qas": {
+      "question": [
+        "What encoder do they use?",
+        "Does the paper improve on QASPER?",
+        "Is there an error analysis?"
+      ],
+      "question_id": [
+        "q1",
+        "q2",
+        "q3"
+      ],
+      "question_writer": [
+        "writer-1",
+        "writer-2",
+        "writer-3"
+      ],
+      "nlp_background": [
+        "two",
+        "five",
+        ""
+      ],
+      "topic_background": [
+        "familiar",
+        "research",
+        ""
+      ],
+      "paper_read": [
+        "yes",
+        "yes",
+        "no"
+      ],
+      "search_query": [
+        "scientific qa encoder",
+        "qasper performance",
+        ""
+      ],
+      "answers": [
+        {
+          "annotation_id": [
+            "a1"
+          ],
+          "worker_id": [
+            "worker-1"
+          ],
+          "answer": [
+            {
+              "unanswerable": false,
+              "extractive_spans": [
+                "recurrent encoder"
+              ],
+              "yes_no": false,
+              "free_form_answer": "",
+              "evidence": [
+                "The encoder uses recurrent layers with attention pooling."
+              ],
+              "highlighted_evidence": [
+                "recurrent layers with attention pooling"
+              ]
+            }
+          ]
+        },
+        {
+          "annotation_id": [
+            "a2"
+          ],
+          "worker_id": [
+            "worker-2"
+          ],
+          "answer": [
+            {
+              "unanswerable": false,
+              "extractive_spans": [],
+              "yes_no": true,
+              "free_form_answer": "",
+              "evidence": [
+                "Performance improves on QASPER."
+              ],
+              "highlighted_evidence": [
+                "improves on QASPER"
+              ]
+            }
+          ]
+        },
+        {
+          "annotation_id": [
+            "a3"
+          ],
+          "worker_id": [
+            "worker-3"
+          ],
+          "answer": [
+            {
+              "unanswerable": true,
+              "extractive_spans": [],
+              "yes_no": false,
+              "free_form_answer": "",
+              "evidence": [],
+              "highlighted_evidence": []
+            }
+          ]
+        }
+      ]
+    },
+    "figures_and_tables": {
+      "caption": [
+        "Figure 1: Encoder overview."
+      ],
+      "file": [
+        "fig1.png"
+      ]
+    }
+  }
+}

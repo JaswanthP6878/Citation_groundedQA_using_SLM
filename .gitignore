@@ -2,3 +2,4 @@
 .DS_Store
 # any supposed pycaches ignored
 **/__pycache__/*
+.pytest_cache/

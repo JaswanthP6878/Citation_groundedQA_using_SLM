@@ -1,0 +1,324 @@
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{times}
+\usepackage[top=0.9in, bottom=0.9in, left=1in, right=1in]{geometry}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{parskip}
+\usepackage{float}
+
+\makeatletter
+\renewcommand{\section}{\@startsection{section}{1}{\z@}%
+  {5pt \@plus 1pt \@minus 1pt}{1.5pt}%
+  {\normalfont\normalsize\bfseries}}
+\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}%
+  {3pt \@plus 1pt}{1pt}%
+  {\normalfont\normalsize\itshape}}
+\makeatother
+\setlength{\parskip}{2.5pt}
+\setlength{\parindent}{0pt}
+
+\title{\vspace{-1.5em}%
+  \textbf{CS505 Project Status Report: Citation-Grounded QA with Local Models}\\[3pt]
+  {\normalsize\normalfont
+   Boston University \enspace|\enspace
+   Team Progress Report \enspace|\enspace
+   April 8, 2026}\\[1pt]
+  {\normalsize\normalfont Jaswanth Pinnepu | Zukhriddin Fakhriddinov | Atharv Gulati | Aayush Kumar}%
+}
+\date{\vspace{-1.5em}}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\section{Project Goal}
+
+The project studies hallucination reduction in scientific question answering using a fully local retrieval-augmented generation pipeline. The current stack is built around QASPER, shared SCC storage, and locally-run small instruction-tuned models. The main experimental question is how much answer quality and hallucination behavior depend on retrieval quality versus generation behavior, especially under citation forcing.
+
+\section{SCC Layout and Reproducibility}
+
+The implementation uses a strict split between shared deterministic artifacts and per-user experimental outputs.
+
+\textbf{Shared course path}
+
+\texttt{/projectnb/cs505am/projects/zukhriddin\_nlp\_research\_project/qasper}
+
+\textbf{Student working repo}
+
+\texttt{/projectnb/cs505am/students/zfmsai/zukhriddin\_nlp\_research\_project}
+
+\textbf{Backward-compatible symlink}
+
+\texttt{/projectnb/cs505am/students/zfmsai/nlp\_research\_project}
+
+The code automatically resolves either the renamed project path or the older path. Shared data and processed artifacts live in \texttt{projects/}; model caches, runs, and temporary indexes live in \texttt{students/\$USER/}.
+
+\section{What Was Implemented}
+
+\subsection{Task 2: Data and Chunking}
+
+Implemented components:
+
+\begin{itemize}
+\item QASPER loader from official JSON/Hugging Face format
+\item Internal normalized schema for papers, questions, answers, and chunks
+\item Fixed chunking
+\item Sliding-window chunking
+\item Section-aware chunking
+\item Deterministic processed split builder for team-shared reuse
+\end{itemize}
+
+Canonical shared processed artifacts were built for:
+
+\begin{itemize}
+\item \texttt{train}
+\item \texttt{validation}
+\item \texttt{test}
+\end{itemize}
+
+These outputs are the interface boundary used by both retrieval and generation.
+
+\subsection{Task 3: Retrieval}
+
+Implemented retrieval stack:
+
+\begin{itemize}
+\item BM25
+\item Dense retrieval using \texttt{BAAI/bge-small-en-v1.5}
+\item Hybrid reciprocal-rank fusion
+\item Cross-encoder reranking using \texttt{cross-encoder/ms-marco-MiniLM-L-6-v2}
+\item Evaluation via Recall@5, MRR@10, and evidence hit rate
+\end{itemize}
+
+\subsection{Task 4: Generation and Evaluation}
+
+Implemented generation stack:
+
+\begin{itemize}
+\item Baseline prompt style
+\item Citation-forcing prompt style
+\item Local generation with \texttt{microsoft/Phi-3.5-mini-instruct} via \texttt{transformers}
+\item Answer normalization for canonical QASPER answer forms (\texttt{yes}, \texttt{no}, \texttt{unanswerable})
+\item Context compression to question-relevant sentences
+\item SCC-safe batch scripts and memory settings
+\item Evaluation via token F1, citation precision, citation rate, hallucination proxy, and supported-answer rate
+\end{itemize}
+
+\subsection{Task 1: Infra and SCC}
+
+Implemented infrastructure:
+
+\begin{itemize}
+\item Reproducible path/config system
+\item SCC batch scripts for retrieval and generation
+\item Student-local Hugging Face cache handling
+\item Documentation for SCC environment setup
+\item GPU-safe defaults that run on \texttt{academic-gpu}
+\end{itemize}
+
+\section{How the Pipeline Works}
+
+\begin{enumerate}
+\item Load QASPER and normalize into internal objects.
+\item Build processed split artifacts shared across the team.
+\item Chunk each paper with one of the chunking strategies.
+\item Retrieve from chunks belonging only to the paper for the given question.
+\item Generate an answer from the top retrieved chunks.
+\item Score the generated answer against gold answers and gold evidence.
+\end{enumerate}
+
+The current best retriever for generation is \texttt{hybrid}; \texttt{hybrid\_rerank} was evaluated later as a stronger comparator.
+
+\section{Main Results}
+
+\subsection{Retrieval Results on Validation (Section Chunks)}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Method} & \textbf{Recall@5} & \textbf{MRR@10} & \textbf{Evidence Hit} \\
+\midrule
+BM25 & 0.5769 & 0.4110 & 0.7152 \\
+Dense & 0.5886 & 0.4820 & 0.7238 \\
+Hybrid & 0.6313 & 0.5097 & 0.7778 \\
+Hybrid + rerank & 0.6410 & 0.5027 & 0.7702 \\
+\bottomrule
+\end{tabular}
+\caption{Validation retrieval results on section-aware chunks.}
+\end{table}
+
+\textbf{Takeaway:} Hybrid retrieval is the strongest overall default for generation; hybrid + rerank improves recall slightly but did not clearly dominate all retrieval metrics.
+
+\subsection{Generation Results with Hybrid Retrieval}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Prompt} & \textbf{Questions} & \textbf{Token F1} & \textbf{Citation Prec.} & \textbf{Halluc.} & \textbf{Supported} \\
+\midrule
+Baseline & 1005 & 0.3187 & 0.0000 & 0.4657 & 0.7612 \\
+Citation forcing & 1005 & 0.3167 & 0.3423 & 0.5572 & 0.5741 \\
+\bottomrule
+\end{tabular}
+\caption{Full-validation generation results using hybrid retrieval. Citation forcing had citation rate 0.9254.}
+\end{table}
+
+\textbf{Takeaway:} Citation forcing now works much better than the initial versions and produces citations reliably, but baseline remains better on answer quality, hallucination proxy, and supported-answer rate.
+
+\subsection{Generation Results with Hybrid + Rerank}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Prompt} & \textbf{Questions} & \textbf{Token F1} & \textbf{Citation Prec.} & \textbf{Halluc.} & \textbf{Supported} \\
+\midrule
+Baseline & 100 & 0.3697 & 0.0000 & 0.4300 & 0.8000 \\
+Citation forcing & 100 & 0.3569 & 0.3528 & 0.5400 & 0.6600 \\
+\bottomrule
+\end{tabular}
+\caption{100-question validation sample using hybrid + rerank. Citation forcing had citation rate 0.9100.}
+\end{table}
+
+\textbf{Takeaway:} The strongest generation setting observed so far is the \texttt{hybrid\_rerank} baseline. Even under stronger retrieval, citation forcing still trades off answer quality for citation behavior.
+
+\section{What Changed During Debugging}
+
+Several implementation issues were identified and fixed during the experiments:
+
+\begin{itemize}
+\item SCC scheduler instability prevented job submission for a period; jobs were moved to proper batch usage once SCC recovered.
+\item The correct GPU queue for this course environment was \texttt{academic-gpu}.
+\item Generation initially hit CUDA OOM; the fix was to cap input/context lengths and use conservative CUDA settings.
+\item Token F1 was artificially low because the model often produced verbose forms like ``The context does not specify...'' instead of exact canonical answers. Answer normalization fixed this.
+\item SCC environment-variable submission did not reliably propagate \texttt{QUESTION\_LIMIT}; the batch script was changed to accept it as a positional argument.
+\item After the SCC project rename, shared path resolution failed; config detection was extended to support both old and new project names.
+\end{itemize}
+
+\section{Current Status}
+
+Completed:
+
+\begin{itemize}
+\item Task 2: complete
+\item Task 3: complete
+\item Task 4 core Phi-based evaluation pipeline: complete
+\item Task 1 setup, SCC usage, and reproducibility documentation: complete for the current stack
+\end{itemize}
+
+Reached goals:
+
+\begin{itemize}
+\item deterministic shared QASPER preprocessing for the whole team
+\item full retrieval implementation and benchmarking
+\item full generation implementation and benchmarking with Phi-3.5
+\item SCC-compatible batch execution for both retrieval and generation
+\item clear best current setting before moving on to new models
+\end{itemize}
+
+\textbf{Best current setting before Qwen:}
+
+\begin{itemize}
+\item retrieval: \texttt{hybrid\_rerank} is the strongest generation-side comparator on the current 100-question sample
+\item generation: baseline prompting is still better than citation forcing for raw answer quality
+\end{itemize}
+
+\section{How to Inspect Results}
+
+From SCC:
+
+\begin{verbatim}
+cd /projectnb/cs505am/students/$USER/zukhriddin_nlp_research_project
+ls -1t runs/retrieval/validation/section/*.json | head
+ls -1t runs/generation/validation/section/*.json | head
+\end{verbatim}
+
+To print metrics from a saved run:
+
+\begin{verbatim}
+python - <<'PY'
+import json
+from pathlib import Path
+run_dir = Path("runs/generation/validation/section")
+path = run_dir / "hybrid.baseline.20260409T011901Z.json"
+obj = json.loads(path.read_text())
+print(obj["metrics"])
+PY
+\end{verbatim}
+
+\section{How to Reproduce the Pipeline}
+
+\subsection{Environment}
+
+\begin{verbatim}
+chmod +x setup_env.sh
+./setup_env.sh
+\end{verbatim}
+
+\subsection{Check resolved paths}
+
+\begin{verbatim}
+python3 scripts/show_project_paths.py
+\end{verbatim}
+
+\subsection{Retrieval evaluation}
+
+\begin{verbatim}
+python scripts/evaluate_qasper_retrieval.py \
+  --split validation \
+  --strategy section \
+  --method hybrid
+\end{verbatim}
+
+\subsection{Generation evaluation}
+
+\begin{verbatim}
+python scripts/evaluate_qasper_generation.py \
+  --split validation \
+  --strategy section \
+  --retrieval-method hybrid \
+  --prompt-style baseline \
+  --generation-model microsoft/Phi-3.5-mini-instruct
+\end{verbatim}
+
+\subsection{SCC batch generation sample}
+
+\begin{verbatim}
+qsub -N qasper_gen_sample -o logs/qasper_gen_sample.log \
+  scripts/qsub_qasper_generation.sh hybrid citation_forcing \
+  validation section 5 20 100 2048 1200 128
+\end{verbatim}
+
+The final four positional arguments are:
+
+\begin{itemize}
+\item question limit
+\item max input tokens
+\item max context tokens
+\item max new tokens
+\end{itemize}
+
+\section{Next Step}
+
+The current Phi-based milestone is complete enough to move on. The next experiments should compare:
+
+\begin{itemize}
+\item \texttt{Qwen2.5-7B-Instruct}
+\item \texttt{Qwen3-4B-Instruct-2507}
+\end{itemize}
+
+Those runs should reuse the same retrieval and evaluation pipeline so that model changes are isolated from data and retrieval changes.
+
+\end{document}
