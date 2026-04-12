@@ -39,6 +39,8 @@ class PaperRetrieverCache:
         method: str,
         dense_model_name: str,
         reranker_model_name: str,
+        dense_device: str | None,
+        reranker_device: str | None,
         retrieval_depth: int,
         use_faiss: bool,
     ) -> None:
@@ -46,6 +48,8 @@ class PaperRetrieverCache:
         self.method = method
         self.dense_model_name = dense_model_name
         self.reranker_model_name = reranker_model_name
+        self.dense_device = dense_device
+        self.reranker_device = reranker_device
         self.retrieval_depth = retrieval_depth
         self.use_faiss = use_faiss
         self._retrievers = {}
@@ -80,14 +84,37 @@ class PaperRetrieverCache:
             except ImportError:
                 from qasper_rag.retrieval import HuggingFaceEncoder
 
-                self._dense_encoder = HuggingFaceEncoder(self.dense_model_name)
+                self._dense_encoder = HuggingFaceEncoder(
+                    self.dense_model_name,
+                    device=self.dense_device,
+                )
             else:
-                self._dense_encoder = SentenceTransformer(self.dense_model_name)
+                sentence_transformer_kwargs = {}
+                if self.dense_device is not None:
+                    sentence_transformer_kwargs["device"] = self.dense_device
+                self._dense_encoder = SentenceTransformer(
+                    self.dense_model_name,
+                    **sentence_transformer_kwargs,
+                )
         return self._dense_encoder
 
     def _get_reranker(self):
         if self._reranker is None:
-            self._reranker = CrossEncoderReranker(model_name=self.reranker_model_name)
+            try:
+                from sentence_transformers import CrossEncoder
+            except ImportError:
+                self._reranker = CrossEncoderReranker(
+                    model_name=self.reranker_model_name,
+                    device=self.reranker_device,
+                )
+            else:
+                cross_encoder_kwargs = {}
+                if self.reranker_device is not None:
+                    cross_encoder_kwargs["device"] = self.reranker_device
+                self._reranker = CrossEncoderReranker(
+                    model=CrossEncoder(self.reranker_model_name, **cross_encoder_kwargs),
+                    model_name=self.reranker_model_name,
+                )
         return self._reranker
 
 
@@ -97,7 +124,7 @@ def main() -> None:
     parser.add_argument("--strategy", choices=("fixed", "sliding", "section"), default="section")
     parser.add_argument(
         "--retrieval-method",
-        choices=("bm25", "dense", "hybrid", "bm25_rerank", "dense_rerank", "hybrid_rerank"),
+        choices=("none", "random", "bm25", "dense", "hybrid", "bm25_rerank", "dense_rerank", "hybrid_rerank"),
         default="hybrid",
     )
     parser.add_argument("--prompt-style", choices=("baseline", "citation_forcing"), default="baseline")
@@ -106,7 +133,9 @@ def main() -> None:
     parser.add_argument("--question-limit", type=int, default=None)
     parser.add_argument("--paper-id", type=str, default=None)
     parser.add_argument("--dense-model", type=str, default="BAAI/bge-small-en-v1.5")
+    parser.add_argument("--dense-device", type=str, default=None)
     parser.add_argument("--reranker-model", type=str, default="cross-encoder/ms-marco-MiniLM-L-6-v2")
+    parser.add_argument("--reranker-device", type=str, default=None)
     parser.add_argument("--generation-model", type=str, default="microsoft/Phi-3.5-mini-instruct")
     parser.add_argument("--max-new-tokens", type=int, default=128)
     parser.add_argument("--max-input-tokens", type=int, default=2048)
@@ -147,6 +176,8 @@ def main() -> None:
         method=args.retrieval_method,
         dense_model_name=args.dense_model,
         reranker_model_name=args.reranker_model,
+        dense_device=args.dense_device,
+        reranker_device=args.reranker_device,
         retrieval_depth=args.retrieval_depth,
         use_faiss=not args.disable_faiss,
     )
@@ -204,7 +235,9 @@ def main() -> None:
         "retrieval_k": args.retrieval_k,
         "retrieval_depth": args.retrieval_depth,
         "dense_model": args.dense_model if "dense" in args.retrieval_method or "hybrid" in args.retrieval_method else None,
+        "dense_device": args.dense_device,
         "reranker_model": args.reranker_model if args.retrieval_method.endswith("_rerank") else None,
+        "reranker_device": args.reranker_device,
         "generation_model": args.generation_model,
         "max_new_tokens": args.max_new_tokens,
         "max_input_tokens": args.max_input_tokens,

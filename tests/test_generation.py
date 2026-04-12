@@ -14,6 +14,8 @@ from qasper_rag.generation_eval import (
     aggregate_generation_metrics,
     collect_gold_answers,
     evaluate_generation_prediction,
+    expand_multi_reference_pairs,
+    max_group_scores,
     token_f1_score,
 )
 
@@ -181,6 +183,18 @@ def test_token_f1_and_gold_answers() -> None:
     assert token_f1_score("banana", "banana support") > 0.0
 
 
+def test_multi_reference_pair_expansion_and_group_max_scoring() -> None:
+    predictions = ["banana support", "yes"]
+    reference_sets = [("banana", "banana support"), ("yes",)]
+
+    expanded_predictions, expanded_references, group_sizes = expand_multi_reference_pairs(predictions, reference_sets)
+
+    assert expanded_predictions == ["banana support", "banana support", "yes"]
+    assert expanded_references == ["banana", "banana support", "yes"]
+    assert group_sizes == [2, 1]
+    assert max_group_scores([0.2, 0.9, 0.8], group_sizes) == [0.9, 0.8]
+
+
 def test_generation_metrics_capture_citations_and_hallucination_proxy() -> None:
     question = make_question()
     chunks = make_chunks()
@@ -198,9 +212,11 @@ def test_generation_metrics_capture_citations_and_hallucination_proxy() -> None:
     assert prediction.answer_text == "Banana support appears in the results section."
     assert prediction.cited_chunk_ids == ("c2",)
     assert metrics.token_f1 > 0.0
+    assert metrics.bertscore_f1 == 0.0
     assert metrics.citation_precision == 1.0
     assert metrics.hallucination == 0.0
     assert summary["question_count"] == 1
+    assert summary["bertscore_f1"] == 0.0
     assert summary["supported_answer_rate"] == 1.0
 
 

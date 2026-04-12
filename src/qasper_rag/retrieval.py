@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 import re
 from typing import Any, Protocol
 
@@ -181,6 +182,41 @@ class BM25Retriever:
         ]
 
 
+class NullRetriever:
+    backend_name = "none"
+
+    def __init__(self, chunks: list[ProcessedChunk]) -> None:
+        self.chunks = list(chunks)
+
+    def search(self, query: str, k: int) -> list[RetrievalResult]:
+        return []
+
+
+class RandomRetriever:
+    backend_name = "random"
+
+    def __init__(self, chunks: list[ProcessedChunk]) -> None:
+        self.chunks = list(chunks)
+
+    def search(self, query: str, k: int) -> list[RetrievalResult]:
+        if not self.chunks:
+            return []
+
+        sample_size = min(k, len(self.chunks))
+        seed = int.from_bytes(hashlib.sha256(query.encode("utf-8")).digest()[:8], "big")
+        generator = np.random.default_rng(seed)
+        indices = generator.choice(len(self.chunks), size=sample_size, replace=False)
+        return [
+            RetrievalResult(
+                chunk=self.chunks[index],
+                score=float(sample_size - rank + 1),
+                rank=rank,
+                backend=self.backend_name,
+            )
+            for rank, index in enumerate(indices.tolist(), start=1)
+        ]
+
+
 class DenseRetriever:
     backend_name = "dense"
 
@@ -319,9 +355,11 @@ class CrossEncoderReranker:
         *,
         model: SupportsPredict | None = None,
         model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        device: str | None = None,
     ) -> None:
         self.model_name = model_name
-        self.model = model or self._load_default_model(model_name)
+        self.device = device
+        self.model = model or self._load_default_model(model_name, device=device)
 
     def rerank(self, query: str, results: list[RetrievalResult], *, top_k: int | None = None) -> list[RetrievalResult]:
         if not results:
@@ -342,12 +380,15 @@ class CrossEncoderReranker:
             for rank, index in enumerate(ranked_indices, start=1)
         ]
 
-    def _load_default_model(self, model_name: str) -> SupportsPredict:
+    def _load_default_model(self, model_name: str, *, device: str | None = None) -> SupportsPredict:
         try:
             from sentence_transformers import CrossEncoder
         except ImportError:
-            return HuggingFaceCrossEncoder(model_name)
-        return CrossEncoder(model_name)
+            return HuggingFaceCrossEncoder(model_name, device=device)
+        cross_encoder_kwargs = {}
+        if device is not None:
+            cross_encoder_kwargs["device"] = device
+        return CrossEncoder(model_name, **cross_encoder_kwargs)
 
 
 class RerankRetriever:
@@ -378,6 +419,12 @@ def build_retriever(
     rrf_k: int = 60,
 ) -> Any:
     normalized_method = method.lower()
+
+    if normalized_method == "none":
+        return NullRetriever(chunks)
+
+    if normalized_method == "random":
+        return RandomRetriever(chunks)
 
     if normalized_method == "bm25":
         return BM25Retriever(chunks, tokenizer=tokenizer, bm25_backend=bm25_backend)

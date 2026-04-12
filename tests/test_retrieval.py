@@ -6,7 +6,10 @@ from qasper_rag.retrieval import (
     CrossEncoderReranker,
     DenseRetriever,
     HybridRetriever,
+    NullRetriever,
+    RandomRetriever,
     RerankRetriever,
+    build_retriever,
     retrieve,
 )
 from qasper_rag.retrieval_eval import aggregate_question_metrics, evaluate_ranked_chunks
@@ -137,6 +140,24 @@ def test_dense_retriever_works_with_fake_encoder_without_faiss() -> None:
     assert [result.chunk.chunk_id for result in results] == ["c3", "c1"]
 
 
+def test_null_retriever_returns_no_results() -> None:
+    retriever = NullRetriever(make_chunks())
+
+    assert retriever.search("banana support", 5) == []
+
+
+def test_random_retriever_is_deterministic_per_query() -> None:
+    chunks = make_chunks()
+    retriever = RandomRetriever(chunks)
+
+    first = retriever.search("banana support", 2)
+    second = retriever.search("banana support", 2)
+
+    assert [result.chunk.chunk_id for result in first] == [result.chunk.chunk_id for result in second]
+    assert [result.rank for result in first] == [1, 2]
+    assert [result.backend for result in first] == ["random", "random"]
+
+
 def test_hybrid_and_reranker_promote_best_support_chunk() -> None:
     chunks = make_chunks()
     bm25 = BM25Retriever(chunks, bm25_backend=FakeBM25Backend([["banana", "intro"], ["orange"], ["banana", "support"]]))
@@ -149,6 +170,16 @@ def test_hybrid_and_reranker_promote_best_support_chunk() -> None:
 
     assert [result.chunk.chunk_id for result in results] == ["c3", "c1"]
     assert retrieve("banana support", chunks, "dense", 1, encoder=FakeEncoder(), use_faiss=False)[0].chunk_id == "c3"
+
+
+def test_build_retriever_supports_none_and_random_methods() -> None:
+    chunks = make_chunks()
+
+    none_retriever = build_retriever("none", chunks)
+    random_retriever = build_retriever("random", chunks)
+
+    assert isinstance(none_retriever, NullRetriever)
+    assert isinstance(random_retriever, RandomRetriever)
 
 
 def test_retrieval_metrics_capture_recall_mrr_and_hit_rate() -> None:

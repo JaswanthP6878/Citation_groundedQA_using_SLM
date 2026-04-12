@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import re
 from statistics import mean
 import string
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from .artifacts import ProcessedChunk, ProcessedQuestion
 from .generation import GenerationPrediction
@@ -75,6 +75,38 @@ class QuestionGenerationMetrics:
     citation_count: int
     cited_support_count: int
     answer_supported: float
+    bertscore_f1: float = 0.0
+
+
+def expand_multi_reference_pairs(
+    predictions: Sequence[str],
+    reference_sets: Sequence[Sequence[str]],
+) -> tuple[list[str], list[str], list[int]]:
+    expanded_predictions: list[str] = []
+    expanded_references: list[str] = []
+    group_sizes: list[int] = []
+
+    for prediction, references in zip(predictions, reference_sets):
+        normalized_references = [reference for reference in references if reference]
+        if not normalized_references:
+            normalized_references = [""]
+        group_sizes.append(len(normalized_references))
+        expanded_predictions.extend(prediction for _ in normalized_references)
+        expanded_references.extend(normalized_references)
+
+    return expanded_predictions, expanded_references, group_sizes
+
+
+def max_group_scores(scores: Sequence[float], group_sizes: Sequence[int]) -> list[float]:
+    grouped_scores: list[float] = []
+    offset = 0
+    for group_size in group_sizes:
+        if group_size <= 0:
+            grouped_scores.append(0.0)
+            continue
+        grouped_scores.append(max(float(score) for score in scores[offset : offset + group_size]))
+        offset += group_size
+    return grouped_scores
 
 
 def evaluate_generation_prediction(
@@ -121,6 +153,7 @@ def evaluate_generation_prediction(
         citation_count=len(cited_chunks),
         cited_support_count=len(supporting_cited_chunks),
         answer_supported=answer_supported,
+        bertscore_f1=0.0,
     )
 
 
@@ -133,6 +166,7 @@ def aggregate_generation_metrics(metrics: list[QuestionGenerationMetrics]) -> di
         return {
             "question_count": 0,
             "token_f1": 0.0,
+            "bertscore_f1": 0.0,
             "citation_precision": 0.0,
             "hallucination_rate": 0.0,
             "citation_rate": 0.0,
@@ -142,6 +176,7 @@ def aggregate_generation_metrics(metrics: list[QuestionGenerationMetrics]) -> di
     return {
         "question_count": len(metrics),
         "token_f1": mean(metric.token_f1 for metric in metrics),
+        "bertscore_f1": mean(metric.bertscore_f1 for metric in metrics),
         "citation_precision": mean(metric.citation_precision for metric in metrics),
         "hallucination_rate": mean(metric.hallucination for metric in metrics),
         "citation_rate": mean(1.0 if metric.citation_count else 0.0 for metric in metrics),
@@ -159,4 +194,5 @@ def serialize_generation_metrics(metrics: QuestionGenerationMetrics) -> dict[str
         "citation_count": metrics.citation_count,
         "cited_support_count": metrics.cited_support_count,
         "answer_supported": metrics.answer_supported,
+        "bertscore_f1": metrics.bertscore_f1,
     }

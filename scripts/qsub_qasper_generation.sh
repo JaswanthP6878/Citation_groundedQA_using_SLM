@@ -22,6 +22,8 @@ MAX_INPUT_TOKENS_ARG="${8:-}"
 MAX_CONTEXT_TOKENS_ARG="${9:-}"
 MAX_NEW_TOKENS_ARG="${10:-}"
 GENERATION_MODEL_ARG="${11:-}"
+DENSE_DEVICE_ARG="${12:-}"
+RERANKER_DEVICE_ARG="${13:-}"
 
 DEFAULT_PROJECT_ROOT="/projectnb/cs505am/students/$USER/zukhriddin_nlp_research_project"
 if [[ ! -d "$DEFAULT_PROJECT_ROOT" && -d "/projectnb/cs505am/students/$USER/nlp_research_project" ]]; then
@@ -35,6 +37,9 @@ QUESTION_LIMIT="${QUESTION_LIMIT_ARG:-${QUESTION_LIMIT:-}}"
 MAX_INPUT_TOKENS="${MAX_INPUT_TOKENS_ARG:-${MAX_INPUT_TOKENS:-2048}}"
 MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS_ARG:-${MAX_CONTEXT_TOKENS:-1200}}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS_ARG:-${MAX_NEW_TOKENS:-128}}"
+DENSE_DEVICE="${DENSE_DEVICE_ARG:-${DENSE_DEVICE:-}}"
+RERANKER_DEVICE="${RERANKER_DEVICE_ARG:-${RERANKER_DEVICE:-}}"
+TRANSFORMERS_OVERLAY_DIR="${TRANSFORMERS_OVERLAY_DIR:-$PROJECT_ROOT/.vendor/qwen3_transformers_4_51}"
 mkdir -p "$PROJECT_ROOT/logs" "$HF_HOME"
 
 module load miniconda
@@ -43,6 +48,10 @@ conda activate vmr
 cd "$PROJECT_ROOT"
 export HF_HOME
 export OMP_NUM_THREADS="${NSLOTS:-1}"
+
+if [[ "$GENERATION_MODEL" == Qwen/Qwen3-* && -d "$TRANSFORMERS_OVERLAY_DIR" ]]; then
+  export PYTHONPATH="$TRANSFORMERS_OVERLAY_DIR${PYTHONPATH:+:$PYTHONPATH}"
+fi
 
 cmd=(
   python
@@ -61,6 +70,14 @@ cmd=(
 
 if [[ -n "$QUESTION_LIMIT" ]]; then
   cmd+=(--question-limit "$QUESTION_LIMIT")
+fi
+
+if [[ -n "$DENSE_DEVICE" ]]; then
+  cmd+=(--dense-device "$DENSE_DEVICE")
+fi
+
+if [[ -n "$RERANKER_DEVICE" ]]; then
+  cmd+=(--reranker-device "$RERANKER_DEVICE")
 fi
 
 "${cmd[@]}"
