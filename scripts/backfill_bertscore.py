@@ -80,7 +80,7 @@ def main() -> None:
         questions_payload = payload.get("questions", [])
         if args.skip_existing and "bertscore_f1" in metrics and all(
             "bertscore_f1" in question_payload.get("metrics", {}) for question_payload in questions_payload
-        ):
+        ) and "bertscore_backfilled_at_utc" in payload:
             skipped_count += 1
             continue
 

@@ -1,0 +1,145 @@
+\documentclass[11pt]{article}
+\usepackage{acl}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+
+\setlength\titlebox{6cm}
+
+\title{Midway Report: Citation-Grounded Scientific QA with Local Retrieval-Augmented Generation}
+
+\author{
+  Jaswanth Pinnepu \\
+  Boston University \\
+  \texttt{jaswanth@bu.edu}
+  \And
+  Zukhriddin Fakhriddinov \\
+  Boston University \\
+  \texttt{zfmsai@bu.edu}
+  \And
+  Atharv Gulati \\
+  Boston University \\
+  \texttt{atharvg@bu.edu}
+  \And
+  Aayush Kumar \\
+  Boston University \\
+  \texttt{aayushk@bu.edu}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We study hallucination reduction in scientific question answering with a fully local retrieval-augmented generation (RAG) pipeline. Our setting uses QASPER as the benchmark, Phi-3.5-mini-instruct as the main generator, and shared Boston University SCC infrastructure for reproducible experiments. By the midway point, we have completed the data pipeline, chunking strategies, retrieval stack, and the proposal's core generation ablations A--E, along with three additional baselines: parametric-only generation, BM25-only retrieval, and random retrieval. On a 100-question validation sample, the strongest core condition so far is section-aware chunking with hybrid retrieval and baseline prompting (Condition C), which reaches token F1 0.3947, BERTScore F1 0.8946, hallucination rate 0.39, and supported-answer rate 0.79. Citation forcing improves explicit citation behavior, but in the current system it still reduces answer quality and grounding relative to the strongest baseline setting.
+\end{abstract}
+
+\section{Introduction}
+
+Our project asks how much hallucination in a small, locally hosted language model is caused by retrieval quality versus generation behavior. We focus on scientific question answering because scientific answers are high-stakes, evidence-dependent, and naturally compatible with citation-grounded evaluation. We use QASPER \citep{dasigi2021qasper}, which provides research-paper questions, answers, and gold evidence spans, allowing us to evaluate both retrieval and final answers.
+
+This project draws most directly on course material from the transformer and LLM lectures (attention, pretraining, prompting, and local adaptation), the question answering and information retrieval lecture, and the evaluation lectures on metrics and best practices. Several engineering components in our system were not covered directly in lecture, including FAISS indexing, reciprocal-rank fusion, cross-encoder reranking, and citation-grounded RAG evaluation. We therefore learned those pieces from project readings, model documentation, and system-building practice. We explicitly note these gaps because they shape the remaining work before the final report.
+
+\section{Description of Progress}
+
+\subsection{Methods}
+
+We implemented a fully local RAG pipeline around QASPER. The data layer normalizes raw papers, questions, answers, and evidence into a shared internal schema. We then build deterministic processed splits in a shared SCC course directory so the entire team uses identical artifacts.
+
+For chunking, we implemented the three strategies proposed in our project plan: fixed-size chunks (256 tokens, 32 overlap), sliding-window chunks (512 tokens, 128 overlap), and section-aware chunks aligned to paper structure. For retrieval, we implemented BM25, dense retrieval with BGE-small \citep{xiao2023bge}, hybrid reciprocal-rank fusion, and hybrid retrieval with cross-encoder reranking. For generation, we use \texttt{microsoft/Phi-3.5-mini-instruct} \citep{microsoft2024phi3} with two prompt styles: baseline answering and citation forcing, where answers must explicitly cite retrieved passages. The evaluation pipeline measures token F1, BERTScore, citation precision/rate, hallucination rate, supported-answer rate, Recall@5, MRR@10, and evidence hit rate.
+
+\subsection{Experiments}
+
+We completed the retrieval experiments on validation section chunks and then ran the proposal's core ablation conditions:
+\begin{itemize}
+    \item A: fixed chunking + dense retrieval + baseline prompting
+    \item B: fixed chunking + hybrid retrieval + baseline prompting
+    \item C: section-aware chunking + hybrid retrieval + baseline prompting
+    \item D: section-aware chunking + hybrid retrieval + reranking + baseline prompting
+    \item E: section-aware chunking + hybrid retrieval + reranking + citation forcing
+\end{itemize}
+
+We also added the proposal baselines: parametric-only generation (no retrieval), BM25-only retrieval, and random retrieval over five passages. All generation conditions above were run on a 100-question validation sample to keep experiments comparable on SCC. In addition, we ran several larger validation experiments outside the A--E table and exploratory model comparisons with Qwen2.5-7B and Qwen3-4B, but those are side experiments rather than the main midway result story.
+
+\subsection{Results}
+
+Table~\ref{tab:retrieval} summarizes the retrieval-only experiments. Hybrid retrieval gives the best overall validation balance, while hybrid plus reranking improves Recall@5 slightly but does not dominate every metric.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+Method & Recall@5 & MRR@10 & Evidence hit \\
+\midrule
+BM25 & 0.5769 & 0.4110 & 0.7152 \\
+Dense & 0.5886 & 0.4820 & 0.7238 \\
+Hybrid & 0.6313 & 0.5097 & 0.7778 \\
+Hybrid + rerank & 0.6410 & 0.5027 & 0.7702 \\
+\bottomrule
+\end{tabular}
+\caption{Validation retrieval results on section-aware chunks.}
+\label{tab:retrieval}
+\end{table}
+
+Table~\ref{tab:core} shows the main A--E generation results. The strongest condition so far is C: section-aware chunking with hybrid retrieval and baseline prompting. Moving from fixed hybrid retrieval (B) to section-aware hybrid retrieval (C) gives the largest gain in the main table: token F1 rises from 0.3365 to 0.3947 and hallucination rate drops from 0.52 to 0.39. Reranking (D) does not beat C on this 100-question sample, although it does slightly improve supported-answer rate. Citation forcing (E) produces citations very reliably, but still lowers answer quality and grounding relative to the strongest non-citation setting.
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Cond. & Retrieval & Chunking & Prompt & Token F1 & BERTScore F1 & Halluc. \\
+\midrule
+A & Dense & Fixed & Baseline & 0.3636 & 0.8918 & 0.50 \\
+B & Hybrid & Fixed & Baseline & 0.3365 & 0.8834 & 0.52 \\
+C & Hybrid & Section & Baseline & \textbf{0.3947} & \textbf{0.8946} & \textbf{0.39} \\
+D & Hybrid + rerank & Section & Baseline & 0.3697 & 0.8910 & 0.43 \\
+E & Hybrid + rerank & Section & Citation & 0.3569 & 0.8871 & 0.54 \\
+\bottomrule
+\end{tabular}
+\caption{Core proposal ablations on a 100-question validation sample. Condition E also achieves citation precision 0.3528, citation rate 0.91, and supported-answer rate 0.66; Condition C achieves supported-answer rate 0.79.}
+\label{tab:core}
+\end{table*}
+
+Table~\ref{tab:baselines} gives the three extra baselines from the proposal. Parametric-only generation is much worse than any retrieval-based condition, which supports the central claim that retrieval materially reduces hallucination in this task. BM25-only performs better than random retrieval and nearly matches the weaker dense/hybrid ablations on this sample, while random retrieval remains clearly worse on grounding.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Baseline & Token F1 & BERTScore & Halluc. & Supported \\
+\midrule
+Parametric-only & 0.1600 & 0.8397 & 0.95 & 0.05 \\
+BM25-only & 0.3426 & 0.8896 & 0.49 & 0.70 \\
+Random retrieval & 0.3257 & 0.8856 & 0.68 & 0.46 \\
+\bottomrule
+\end{tabular}
+\caption{Additional baselines on the same 100-question validation sample.}
+\label{tab:baselines}
+\end{table}
+
+One practical lesson from these experiments is that token F1 alone understates answer quality. Our best systems have token F1 around 0.35--0.39 but BERTScore near 0.89, showing that many predictions are semantically reasonable paraphrases even when they do not exactly match QASPER's canonical wording. However, BERTScore does not replace grounding metrics, so we still report hallucination and supported-answer rate separately.
+
+\section{Project Plan}
+
+Before the final report, we plan to do four things. First, we will scale the strongest conditions to larger validation runs, prioritizing C and E. Second, we will complete the remaining proposal evaluation pieces that are not yet implemented: NLI-based citation precision, a local-judge faithfulness metric such as RAGAS \citep{es2023ragas}, and a small manual error analysis. Third, we will tighten citation forcing so that explicit citations do not continue to hurt answer quality as much as they do now. Fourth, we will update the writeup to clearly separate our core Phi-based ablation story from the exploratory Qwen side experiments.
+
+We also want to be explicit about what is not yet covered relative to the proposal and course scope. We have not yet run the proposal's stretch-generator conditions with Llama-3-8B or Mistral-7B. We also have not yet completed human evaluation or the NLI-based attribution scorer. These missing pieces are not due to a conceptual shift in the project; they are deferred because the midway milestone was spent getting the local SCC pipeline, retrieval stack, and core A--E ablations into a stable, reproducible state.
+
+\section{Conclusion}
+
+By the midway point, the core system is working end-to-end and the main proposal ablation table is substantially complete. The clearest result so far is that chunking and retrieval choices matter a great deal: section-aware chunking with hybrid retrieval gives the best current answer quality and lowest hallucination rate. Citation forcing is promising for attribution behavior, but it has not yet surpassed the strongest baseline configuration. The remaining work is therefore focused less on infrastructure and more on tightening evaluation and improving grounded generation quality.
+
+{\small
+\bibliographystyle{acl_natbib}
+\bibliography{references}
+}
+
+\end{document}
