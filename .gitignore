@@ -3,3 +3,7 @@
 # any supposed pycaches ignored
 **/__pycache__/*
 .pytest_cache/
+
+# local SCC result archives are kept on disk but not committed
+local_scc_results/*
+!local_scc_results/README.md

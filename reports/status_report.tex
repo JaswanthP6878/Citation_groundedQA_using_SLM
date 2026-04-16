@@ -29,7 +29,7 @@
   {\normalsize\normalfont
    Boston University \enspace|\enspace
    Team Progress Report \enspace|\enspace
-   April 8, 2026}\\[1pt]
+   April 13, 2026}\\[1pt]
   {\normalsize\normalfont Jaswanth Pinnepu | Zukhriddin Fakhriddinov | Atharv Gulati | Aayush Kumar}%
 }
 \date{\vspace{-1.5em}}
@@ -158,41 +158,58 @@ Hybrid + rerank & 0.6410 & 0.5027 & 0.7702 \\
 
 \textbf{Takeaway:} Hybrid retrieval is the strongest overall default for generation; hybrid + rerank improves recall slightly but did not clearly dominate all retrieval metrics.
 
-\subsection{Generation Results with Hybrid Retrieval}
+\subsection{Final Validation Results for the Core Phi Conditions}
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lcccccc@{}}
 \toprule
-\textbf{Prompt} & \textbf{Questions} & \textbf{Token F1} & \textbf{Citation Prec.} & \textbf{Halluc.} & \textbf{Supported} \\
+\textbf{Condition} & \textbf{Questions} & \textbf{Token F1} & \textbf{BERTScore} & \textbf{Citation Prec.} & \textbf{Halluc.} & \textbf{Supported} \\
 \midrule
-Baseline & 1005 & 0.3187 & 0.0000 & 0.4657 & 0.7612 \\
-Citation forcing & 1005 & 0.3167 & 0.3423 & 0.5572 & 0.5741 \\
+\texttt{A} fixed + dense + baseline & 1005 & 0.3059 & 0.8791 & 0.0000 & 0.5134 & 0.6886 \\
+\texttt{B} fixed + hybrid + baseline & 1005 & 0.3063 & 0.8782 & 0.0000 & 0.5104 & 0.6716 \\
+\texttt{P} parametric-only & 1005 & 0.1350 & 0.8329 & 0.0000 & 0.8657 & 0.1343 \\
+\texttt{M} BM25-only & 1005 & 0.3207 & 0.8813 & 0.0000 & 0.4716 & 0.7254 \\
+\texttt{C} section + hybrid + baseline & 1005 & 0.3197 & 0.8815 & 0.0000 & 0.4527 & 0.7741 \\
+\texttt{D} section + hybrid\_rerank + baseline & 1005 & \textbf{0.3238} & 0.8817 & 0.0000 & \textbf{0.4478} & 0.7652 \\
+\texttt{E} section + hybrid\_rerank + citation & 1005 & 0.3215 & \textbf{0.8819} & 0.3230 & 0.5463 & 0.5960 \\
 \bottomrule
 \end{tabular}
-\caption{Full-validation generation results using hybrid retrieval. Citation forcing had citation rate 0.9254.}
+\caption{Full-validation generation results on 1005 validation questions. Condition E also achieved citation rate 0.9274 and NLI citation precision 0.1416.}
 \end{table}
 
-\textbf{Takeaway:} Citation forcing now works much better than the initial versions and produces citations reliably, but baseline remains better on answer quality, hallucination proxy, and supported-answer rate.
+\textbf{Takeaway:} The full A--E matrix is now on the same full-validation footing. Fixed-chunk conditions \texttt{A} and \texttt{B} underperform the section-aware conditions, which strengthens the original proposal hypothesis that better chunk structure materially helps answer quality. The best overall full-validation setting remains \texttt{D}: section-aware chunking, hybrid retrieval, reranking, and baseline prompting. Citation forcing (\texttt{E}) produces citations very reliably, but still lowers grounding and answer support relative to the strongest baseline setting.
 
-\subsection{Generation Results with Hybrid + Rerank}
+\subsection{Post-Full-Validation Citation Tuning}
+
+After the full-validation comparison, several targeted citation-only fixes were tested on a 100-question validation slice. The goal was to reduce unsupported cited claims without changing the retrieval setup.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-\textbf{Prompt} & \textbf{Questions} & \textbf{Token F1} & \textbf{Citation Prec.} & \textbf{Halluc.} & \textbf{Supported} \\
+\textbf{Run} & \textbf{Token F1} & \textbf{Citation Prec.} & \textbf{Halluc.} & \textbf{Supported} \\
 \midrule
-Baseline & 100 & 0.3697 & 0.0000 & 0.4300 & 0.8000 \\
-Citation forcing & 100 & 0.3569 & 0.3528 & 0.5400 & 0.6600 \\
+Earlier citation sample (overlap baseline) & 0.3569 & 0.3528 & 0.5100 & 0.6900 \\
+Strict one-sentence contract & 0.2976 & \textbf{0.3755} & \textbf{0.5200} & 0.6700 \\
+Decimal-safe compactor + relaxed prompt & 0.3234 & 0.3032 & 0.5900 & 0.5900 \\
+Vacuous-restatement gate & 0.3288 & 0.3032 & 0.5800 & 0.6100 \\
 \bottomrule
 \end{tabular}
-\caption{100-question validation sample using hybrid + rerank. Citation forcing had citation rate 0.9100.}
+\caption{Citation-only tuning runs on the same 100-question overlap.}
 \end{table}
 
-\textbf{Takeaway:} The strongest generation setting observed so far is the \texttt{hybrid\_rerank} baseline. Even under stronger retrieval, citation forcing still trades off answer quality for citation behavior.
+\textbf{Takeaway:} deterministic post-processing recovered some answer quality after the strict-prompt regression, but none of the new citation variants beat the earlier stronger citation sample on the same 100-question overlap. As a result, citation tuning is paused and \texttt{D} remains the preferred overall system configuration.
+
+\subsection{Error Analysis on the Strongest Baseline and Citation Runs}
+
+\begin{itemize}
+\item \textbf{Baseline (\texttt{D})}: retrieval misses remain the dominant failure mode (291 questions), followed by overcautious \texttt{unanswerable} predictions (144 questions). We also see a smaller but important lexical-mismatch slice (49 questions), where token F1 is low but BERTScore is high.
+\item \textbf{Citation forcing (\texttt{E})}: the same retrieval misses remain, but citation-specific issues dominate after retrieval succeeds. The error analysis found 790 unsupported-citation cases, 84 overcautious \texttt{unanswerable} cases, and 162 grounding failures despite evidence being retrieved.
+\item \textbf{Interpretation}: the current citation prompt encourages the model to cite frequently, but many cited claims are not actually entailed by the cited chunk. This matches the low NLI citation precision on full validation.
+\end{itemize}
 
 \section{What Changed During Debugging}
 
@@ -214,8 +231,10 @@ Completed:
 \begin{itemize}
 \item Task 2: complete
 \item Task 3: complete
-\item Task 4 core Phi-based evaluation pipeline: complete
+\item Task 4 core Phi-based evaluation pipeline: complete through full validation
+\item NLI citation backfill and BERTScore backfill: complete for the core Phi runs
 \item Task 1 setup, SCC usage, and reproducibility documentation: complete for the current stack
+\item Human-evaluation sample and reviewer templates: prepared and ready for annotation
 \end{itemize}
 
 Reached goals:
@@ -231,28 +250,36 @@ Reached goals:
 \textbf{Best current setting before Qwen:}
 
 \begin{itemize}
-\item retrieval: \texttt{hybrid\_rerank} is the strongest generation-side comparator on the current 100-question sample
-\item generation: baseline prompting is still better than citation forcing for raw answer quality
+\item retrieval/generation: \texttt{hybrid\_rerank} with baseline prompting is the strongest full-validation Phi configuration
+\item citation behavior: citation forcing is useful for explicit attribution, but not yet for best grounded answer quality
 \end{itemize}
 
 \section{How to Inspect Results}
 
-From SCC:
+From the local archive:
 
 \begin{verbatim}
-cd /projectnb/cs505am/students/$USER/zukhriddin_nlp_research_project
-ls -1t runs/retrieval/validation/section/*.json | head
-ls -1t runs/generation/validation/section/*.json | head
+cd /Users/zukhriddin/Downloads/CS505_NLP/NLP_research_project
+ls -1t local_scc_results/latest/runs/generation/validation/section/*.json
+\end{verbatim}
+
+Human-evaluation materials are in:
+
+\begin{verbatim}
+reports/artifacts/human_eval_sample.csv
+reports/artifacts/human_eval_template_reviewer_1.csv
+reports/artifacts/human_eval_template_reviewer_2.csv
+reports/artifacts/human_eval_instructions.md
 \end{verbatim}
 
 To print metrics from a saved run:
 
 \begin{verbatim}
-python - <<'PY'
+python3 - <<'PY'
 import json
 from pathlib import Path
-run_dir = Path("runs/generation/validation/section")
-path = run_dir / "hybrid.baseline.20260409T011901Z.json"
+run_dir = Path("local_scc_results/latest/runs/generation/validation/section")
+path = run_dir / "hybrid_rerank.baseline.20260413T002827Z.json"
 obj = json.loads(path.read_text())
 print(obj["metrics"])
 PY
@@ -296,29 +323,29 @@ python scripts/evaluate_qasper_generation.py \
 \subsection{SCC batch generation sample}
 
 \begin{verbatim}
-qsub -N qasper_gen_sample -o logs/qasper_gen_sample.log \
-  scripts/qsub_qasper_generation.sh hybrid citation_forcing \
-  validation section 5 20 100 2048 1200 128
+qsub -N phi_full_validation -o logs/phi_full_validation.log \
+  scripts/submit_full_validation_phi.sh
 \end{verbatim}
 
-The final four positional arguments are:
+\subsection{Local SCC archive refresh}
 
 \begin{itemize}
-\item question limit
-\item max input tokens
-\item max context tokens
-\item max new tokens
+\item Pull the latest SCC \texttt{runs/} and \texttt{logs/} down locally without deleting anything remotely:
 \end{itemize}
+
+\begin{verbatim}
+bash scripts/pull_scc_results.sh
+\end{verbatim}
 
 \section{Next Step}
 
-The current Phi-based milestone is complete enough to move on. The next experiments should compare:
+The next remaining steps are evaluation and writeup work, not more infrastructure:
 
 \begin{itemize}
-\item \texttt{Qwen2.5-7B-Instruct}
-\item \texttt{Qwen3-4B-Instruct-2507}
+\item fold the full-validation Phi results into the final report tables
+\item use the new error-analysis artifacts to write a short qualitative discussion section
+\item decide whether stretch-model experiments (Qwen, Llama, Mistral) are worth keeping as side results in the final report
+\item if needed, add one more citation-prompt iteration or a local-judge faithfulness metric
 \end{itemize}
-
-Those runs should reuse the same retrieval and evaluation pipeline so that model changes are isolated from data and retrieval changes.
 
 \end{document}

@@ -1,0 +1,9 @@
+| file | split | strategy | retrieval | prompt | model | questions | token_f1 | bertscore_f1 | hallucination | supported | cite_prec | cite_rate | nli_cite |
+| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense.baseline.20260415T010124Z.json | validation | fixed | dense | baseline | Phi-3.5-mini-instruct | 1005 | 0.3059 | 0.8791 | 0.5134 | 0.6886 | 0.0000 | 0.0000 | 0.0000 |
+| hybrid.baseline.20260415T014013Z.json | validation | fixed | hybrid | baseline | Phi-3.5-mini-instruct | 1005 | 0.3063 | 0.8782 | 0.5104 | 0.6716 | 0.0000 | 0.0000 | 0.0000 |
+| bm25.baseline.20260413T020140Z.json | validation | section | bm25 | baseline | Phi-3.5-mini-instruct | 1005 | 0.3207 | 0.8813 | 0.4716 | 0.7254 | 0.0000 | 0.0000 | 0.0000 |
+| hybrid.baseline.20260412T231758Z.json | validation | section | hybrid | baseline | Phi-3.5-mini-instruct | 1005 | 0.3197 | 0.8815 | 0.4527 | 0.7741 | 0.0000 | 0.0000 | 0.0000 |
+| hybrid_rerank.baseline.20260413T002827Z.json | validation | section | hybrid_rerank | baseline | Phi-3.5-mini-instruct | 1005 | 0.3238 | 0.8817 | 0.4478 | 0.7652 | 0.0000 | 0.0000 | 0.0000 |
+| hybrid_rerank.citation_forcing.20260413T014339Z.json | validation | section | hybrid_rerank | citation_forcing | Phi-3.5-mini-instruct | 1005 | 0.3215 | 0.8819 | 0.5463 | 0.5960 | 0.3230 | 0.9274 | 0.1416 |
+| none.baseline.20260413T014803Z.json | validation | section | none | baseline | Phi-3.5-mini-instruct | 1005 | 0.1350 | 0.8329 | 0.8657 | 0.1343 | 0.0000 | 0.0000 | 0.0000 |

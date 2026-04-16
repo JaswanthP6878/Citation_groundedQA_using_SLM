@@ -76,6 +76,9 @@ class QuestionGenerationMetrics:
     cited_support_count: int
     answer_supported: float
     bertscore_f1: float = 0.0
+    nli_citation_precision: float = 0.0
+    nli_cited_sentence_count: int = 0
+    nli_supported_sentence_count: int = 0
 
 
 def expand_multi_reference_pairs(
@@ -115,6 +118,7 @@ def evaluate_generation_prediction(
     retrieved_chunks: list[ProcessedChunk],
 ) -> QuestionGenerationMetrics:
     gold_answers = collect_gold_answers(question)
+    gold_has_unanswerable = any(answer.lower() == "unanswerable" for answer in gold_answers)
     token_f1 = (
         max(token_f1_score(prediction.answer_text, gold_answer) for gold_answer in gold_answers)
         if gold_answers
@@ -137,7 +141,9 @@ def evaluate_generation_prediction(
         citation_precision = 0.0
         support_pool = retrieved_chunks
 
-    if gold_evidence:
+    if prediction.answer_text == "unanswerable" and gold_has_unanswerable:
+        answer_supported = 1.0
+    elif gold_evidence:
         answer_supported = 1.0 if any(chunk_supports_any_evidence(chunk, gold_evidence) for chunk in support_pool) else 0.0
     else:
         answer_supported = 1.0 if token_f1 > 0.0 else 0.0
@@ -154,6 +160,9 @@ def evaluate_generation_prediction(
         cited_support_count=len(supporting_cited_chunks),
         answer_supported=answer_supported,
         bertscore_f1=0.0,
+        nli_citation_precision=0.0,
+        nli_cited_sentence_count=0,
+        nli_supported_sentence_count=0,
     )
 
 
@@ -168,16 +177,28 @@ def aggregate_generation_metrics(metrics: list[QuestionGenerationMetrics]) -> di
             "token_f1": 0.0,
             "bertscore_f1": 0.0,
             "citation_precision": 0.0,
+            "nli_citation_precision": 0.0,
+            "nli_cited_sentence_count": 0,
+            "nli_supported_sentence_count": 0,
+            "nli_supported_sentence_rate": 0.0,
             "hallucination_rate": 0.0,
             "citation_rate": 0.0,
             "supported_answer_rate": 0.0,
         }
 
+    total_nli_cited_sentences = sum(metric.nli_cited_sentence_count for metric in metrics)
+    total_nli_supported_sentences = sum(metric.nli_supported_sentence_count for metric in metrics)
     return {
         "question_count": len(metrics),
         "token_f1": mean(metric.token_f1 for metric in metrics),
         "bertscore_f1": mean(metric.bertscore_f1 for metric in metrics),
         "citation_precision": mean(metric.citation_precision for metric in metrics),
+        "nli_citation_precision": mean(metric.nli_citation_precision for metric in metrics),
+        "nli_cited_sentence_count": total_nli_cited_sentences,
+        "nli_supported_sentence_count": total_nli_supported_sentences,
+        "nli_supported_sentence_rate": (
+            total_nli_supported_sentences / total_nli_cited_sentences if total_nli_cited_sentences else 0.0
+        ),
         "hallucination_rate": mean(metric.hallucination for metric in metrics),
         "citation_rate": mean(1.0 if metric.citation_count else 0.0 for metric in metrics),
         "supported_answer_rate": mean(metric.answer_supported for metric in metrics),
@@ -195,4 +216,7 @@ def serialize_generation_metrics(metrics: QuestionGenerationMetrics) -> dict[str
         "cited_support_count": metrics.cited_support_count,
         "answer_supported": metrics.answer_supported,
         "bertscore_f1": metrics.bertscore_f1,
+        "nli_citation_precision": metrics.nli_citation_precision,
+        "nli_cited_sentence_count": metrics.nli_cited_sentence_count,
+        "nli_supported_sentence_count": metrics.nli_supported_sentence_count,
     }

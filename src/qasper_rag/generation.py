@@ -295,7 +295,8 @@ def build_prompt(
     elif prompt_style == "citation_forcing":
         system_prompt = (
             "You answer questions about scientific papers using only the provided context. "
-            "Answer in one short sentence when possible. "
+            "Answer in one short sentence or phrase. "
+            "Stay close to the wording of the cited context and do not add inference, summary, or extra claims. "
             "Every factual sentence must end with one or more context ids like [1] or [2, 3]. "
             "Use only citation ids that appear in the provided context. "
             "Do not write labels like 'Context', 'Source', or explanatory notes around citations. "
@@ -304,7 +305,7 @@ def build_prompt(
         citation_answer_instruction = answer_instruction
         if yes_no_question:
             citation_answer_instruction = (
-                "If the question is yes/no, answer with exactly 'yes' or 'no' and cite that same short sentence."
+                "If the question is yes/no, output exactly 'yes [n].' or 'no [n].' and nothing else."
             )
         user_prompt = (
             f"Paper title: {question.paper_title}\n"
@@ -312,9 +313,11 @@ def build_prompt(
             "Task:\n"
             f"- {citation_answer_instruction}\n"
             "- Use only the provided context.\n"
-            "- Keep the answer concise.\n"
+            "- Write one short answer. Prefer a short phrase when it fully answers the question.\n"
+            "- Keep the answer concise and minimally paraphrased.\n"
             "- Every factual sentence must end with citations like [1] or [1, 2].\n"
             "- Use only citation ids that appear in the context block.\n"
+            "- Do not add extra examples, explanation, or summary beyond what the cited context directly supports.\n"
             "- If the context is insufficient, answer with exactly 'unanswerable'.\n\n"
             "Context:\n"
             f"{context_block}\n\n"
@@ -488,14 +491,38 @@ def strip_citation_markers(text: str) -> str:
     return re.sub(r"\s+([.,;:!?])", r"\1", collapsed)
 
 
-def compact_generation_output(text: str) -> str:
+def compact_generation_output(text: str, *, prompt_style: str = "baseline") -> str:
     stripped = text.strip()
     if not stripped:
         return ""
 
     first_block = _PARAGRAPH_SPLIT_RE.split(stripped, maxsplit=1)[0].strip()
     single_line = " ".join(first_block.splitlines()).strip()
+    if prompt_style == "citation_forcing":
+        sentence_matches = [segment.strip() for segment in re.split(r"(?<=[.!?])\s+", single_line) if segment.strip()]
+        cited_sentences = [match for match in sentence_matches if _CITATION_RE.search(match)]
+        if cited_sentences:
+            return cited_sentences[0]
     return single_line
+
+
+def looks_like_vacuous_restatement(question_text: str, answer_text: str) -> bool:
+    question_terms = extract_question_terms(question_text)
+    answer_terms = [
+        token
+        for token in _WORD_RE.findall(answer_text.lower())
+        if token not in _QUESTION_STOPWORDS and len(token) > 1
+    ]
+    if not answer_terms:
+        return False
+
+    novelty = {token for token in answer_terms if token not in question_terms}
+    has_specific_surface_form = (
+        any(character.isdigit() for character in answer_text)
+        or any(character.isupper() for character in answer_text[1:])
+        or "-" in answer_text
+    )
+    return len(novelty) <= 2 and not has_specific_surface_form
 
 
 def normalize_generation_answer(
@@ -526,6 +553,9 @@ def normalize_generation_answer(
     if prompt_style == "citation_forcing" and cited_chunk_count == 0:
         return "unanswerable"
 
+    if prompt_style == "citation_forcing" and looks_like_vacuous_restatement(question_text, normalized):
+        return "unanswerable"
+
     return normalized
 
 
@@ -536,7 +566,7 @@ def build_generation_prediction(
     *,
     model_name: str,
 ) -> GenerationPrediction:
-    cleaned_output = compact_generation_output(raw_output)
+    cleaned_output = compact_generation_output(raw_output, prompt_style=prompt.prompt_style)
     citation_labels = extract_citation_labels(cleaned_output)
     cited_chunk_ids = tuple(
         prompt.label_to_chunk_id[label]

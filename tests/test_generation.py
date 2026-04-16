@@ -103,6 +103,34 @@ def make_yes_no_question():
     )
 
 
+def make_unanswerable_question():
+    return ProcessedQuestion(
+        paper_id="paper-1",
+        paper_title="Paper",
+        question_id="q3",
+        question="What other baselines were evaluated?",
+        question_writer="writer",
+        nlp_background="",
+        topic_background="",
+        paper_read="yes",
+        search_query="",
+        answers=(
+            ProcessedAnswer(
+                annotation_id="a3",
+                worker_id="w3",
+                answer_type="free_form",
+                canonical_answer="unanswerable",
+                unanswerable=True,
+                yes_no=None,
+                extractive_spans=(),
+                free_form_answer="",
+                evidence=("banana support evidence passage",),
+                highlighted_evidence=("banana support",),
+            ),
+        ),
+    )
+
+
 def test_build_prompt_formats_context_and_styles() -> None:
     prompt = build_prompt(make_question(), make_chunks(), prompt_style="citation_forcing")
 
@@ -112,6 +140,7 @@ def test_build_prompt_formats_context_and_styles() -> None:
     assert "[1] Introduction" in prompt.user_prompt
     assert "[2] Results" in prompt.user_prompt
     assert "Every factual sentence must end with citations" in prompt.user_prompt
+    assert "Write one short answer" in prompt.user_prompt
     assert "Do not write labels like 'Context'" in prompt.system_prompt
 
 
@@ -125,6 +154,16 @@ def test_extract_and_strip_citations() -> None:
 def test_compact_output_and_context_budget() -> None:
     compacted = compact_generation_output("First sentence [1].\n\nSecond paragraph should disappear.")
     assert compacted == "First sentence [1]."
+    citation_compacted = compact_generation_output(
+        "Claim one [1]. Claim two [2].",
+        prompt_style="citation_forcing",
+    )
+    assert citation_compacted == "Claim one [1]."
+    decimal_compacted = compact_generation_output(
+        "Stanford NER, spaCy 2.0, and a recurrent model similar to BIBREF13 [1]. Another claim [2].",
+        prompt_style="citation_forcing",
+    )
+    assert decimal_compacted == "Stanford NER, spaCy 2.0, and a recurrent model similar to BIBREF13 [1]."
 
     trimmed = truncate_chunks_to_token_budget(make_chunks(), 3)
     assert len(trimmed) == 1
@@ -149,6 +188,18 @@ def test_normalize_generation_answer_handles_yes_no_and_unanswerable() -> None:
         "What is the baseline?",
         "According to the provided context, the baseline is LASER.",
     ) == "the baseline is LASER."
+    assert normalize_generation_answer(
+        "What languages are evaluated?",
+        "All languages evaluated.",
+        prompt_style="citation_forcing",
+        cited_chunk_count=1,
+    ) == "unanswerable"
+    assert normalize_generation_answer(
+        "What evaluation metric do they use?",
+        "Ratio of correct translations.",
+        prompt_style="citation_forcing",
+        cited_chunk_count=1,
+    ) == "Ratio of correct translations."
 
 
 def test_question_term_and_chunk_compression_prefers_relevant_sentences() -> None:
@@ -214,9 +265,11 @@ def test_generation_metrics_capture_citations_and_hallucination_proxy() -> None:
     assert metrics.token_f1 > 0.0
     assert metrics.bertscore_f1 == 0.0
     assert metrics.citation_precision == 1.0
+    assert metrics.nli_citation_precision == 0.0
     assert metrics.hallucination == 0.0
     assert summary["question_count"] == 1
     assert summary["bertscore_f1"] == 0.0
+    assert summary["nli_citation_precision"] == 0.0
     assert summary["supported_answer_rate"] == 1.0
 
 
@@ -266,3 +319,21 @@ def test_generation_metrics_penalize_unsupported_citations() -> None:
     assert metrics.token_f1 == 0.0
     assert metrics.citation_precision == 0.0
     assert metrics.hallucination == 1.0
+
+
+def test_unanswerable_gold_answer_is_not_marked_hallucinated() -> None:
+    question = make_unanswerable_question()
+    chunks = make_chunks()
+    prompt = build_prompt(question, chunks, prompt_style="baseline")
+    prediction = build_generation_prediction(
+        question,
+        prompt,
+        "unanswerable",
+        model_name="mock-model",
+    )
+
+    metrics = evaluate_generation_prediction(question, prediction, chunks)
+
+    assert metrics.token_f1 == 1.0
+    assert metrics.answer_supported == 1.0
+    assert metrics.hallucination == 0.0
