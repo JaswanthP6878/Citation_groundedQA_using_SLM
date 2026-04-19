@@ -1,0 +1,535 @@
+{
+  "reviewer_files": {
+    "human_eval_template_reviewer_1_filled.csv": "/Users/zukhriddin/Downloads/human_eval_template_reviewer_1_filled.csv",
+    "human_eval_template_reviewer_2_filled.csv": "/Users/zukhriddin/Downloads/human_eval_template_reviewer_2_filled.csv"
+  },
+  "reviewer_count": 2,
+  "judgment_count": 48,
+  "question_count": 24,
+  "agreement_rate": 0.8333333333333334,
+  "per_system_means": {
+    "baseline_correctness": 1.0208333333333333,
+    "citation_correctness": 0.875,
+    "baseline_grounding": 1.0625,
+    "citation_grounding": 0.7083333333333334,
+    "citation_quality": 0.5833333333333334
+  },
+  "total_preference_counts": {
+    "baseline": 22,
+    "citation": 19,
+    "tie": 7
+  },
+  "majority_preference_counts": {
+    "baseline": 9,
+    "citation": 9,
+    "tie": 6
+  },
+  "bucket_majority_counts": {
+    "baseline_better": {
+      "baseline": 4,
+      "citation": 1
+    },
+    "yes_no": {
+      "citation": 3,
+      "tie": 2,
+      "baseline": 1
+    },
+    "citation_better": {
+      "citation": 3,
+      "tie": 3
+    },
+    "random_fill": {
+      "tie": 1
+    },
+    "large_disagreement": {
+      "baseline": 4,
+      "citation": 2
+    }
+  },
+  "per_question": [
+    {
+      "question_id": "02428a8fec9788f6dc3a86b5d5f3aa679935678d",
+      "bucket": "baseline_better",
+      "question": "How do they define robustness of a model?",
+      "baseline_answer": "The robustness of the model is justified by its insensitivity to the true distribution and ability to benefit from additional knowledge without heavy bias.",
+      "candidate_answer": "The robustness of a model is defined by its insensitivity to the true distribution, allowing for a rough estimation to be sufficient.",
+      "baseline_correctness_mean": 1.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 1.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Baseline is partial on bias/robustness; candidate adds unsupported \u201crough estimation\u201d claim.",
+        "Baseline partially reflects robustness as resistance to bias; candidate adds unsupported \"rough estimation\"."
+      ]
+    },
+    {
+      "question_id": "06be47e2f50b902b05ebf1ff1c66051925f5c247",
+      "bucket": "yes_no",
+      "question": "Do they use number of votes as an indicator of preference?",
+      "baseline_answer": "yes",
+      "candidate_answer": "yes",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 2.0,
+      "baseline_grounding_mean": 1.5,
+      "citation_grounding_mean": 2.0,
+      "citation_quality_mean": 2.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "Gold is ambiguous, but \u201cyes\u201d is acceptable and candidate cites voting as preference evidence.",
+        "Both answers are acceptable under ambiguous gold; cited version is directly supported by roll-call passage."
+      ]
+    },
+    {
+      "question_id": "0d34c0812f1e69ea33f76ca8c24c23b0415ebc8d",
+      "bucket": "baseline_better",
+      "question": "Which hand-crafted features are combined with word2vec?",
+      "baseline_answer": "Minimum, mean, and maximum polarity scores of the reviews",
+      "candidate_answer": "3-feats features",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Baseline gives the exact three polarity scores; candidate is unusable.",
+        "Baseline gives the exact three polarity scores; candidate is unsupported nonsense."
+      ]
+    },
+    {
+      "question_id": "10fb7dc031075946153baf0a0599e126de29e3a4",
+      "bucket": "citation_better",
+      "question": "How does the neural network architecture accomodate an unknown amount of senses per word?",
+      "baseline_answer": "The neural network architecture treats WSD as a sentence-pair classification problem by constructing context-gloss pairs from all possible senses of the target word.",
+      "candidate_answer": "The neural network models leverage gloss knowledge by constructing context-gloss pairs from all possible senses of the target word, treating WSD as a sentence-pair classification problem.",
+      "baseline_correctness_mean": 1.0,
+      "citation_correctness_mean": 1.0,
+      "baseline_grounding_mean": 1.0,
+      "citation_grounding_mean": 1.0,
+      "citation_quality_mean": 1.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "Both are partial; candidate is slightly closer by mentioning gloss knowledge.",
+        "Both are only partial/misaligned with gold; candidate at least mentions gloss knowledge."
+      ]
+    },
+    {
+      "question_id": "1b72aa2ec3ce02131e60626639f0cf2056ec23ca",
+      "bucket": "citation_better",
+      "question": "How long is the dataset for each step of hierarchy?",
+      "baseline_answer": "unanswerable",
+      "candidate_answer": "The dataset contains 14,100 tweets",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 1.0,
+      "baseline_grounding_mean": 0.0,
+      "citation_grounding_mean": 1.0,
+      "citation_quality_mean": 1.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "Candidate gives only Level A total, not all hierarchy levels.",
+        "Candidate gives only total size, not per hierarchy counts, but is more useful than abstaining."
+      ]
+    },
+    {
+      "question_id": "1ec152119cf756b16191b236c85522afeed11f59",
+      "bucket": "random_fill",
+      "question": "What experiments are proposed to test that upper layers produce context-specific embeddings?",
+      "baseline_answer": "Experiments comparing the similarity of word representations in the same sentence across different layers of ELMo, BERT, and GPT-2.",
+      "candidate_answer": "Experiments proposed include analyzing the similarity of word representations in the same sentence across different layers of ELMo, BERT, and GPT-2 to test context-specificity.",
+      "baseline_correctness_mean": 1.0,
+      "citation_correctness_mean": 1.0,
+      "baseline_grounding_mean": 1.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "tie": 1,
+        "baseline": 1
+      },
+      "majority_preference": "tie",
+      "notes": [
+        "Both are partial and omit the key metrics like self-similarity and maximum explainable variance.",
+        "Both only mention one experiment type; candidate citations do not support the proposed experiments."
+      ]
+    },
+    {
+      "question_id": "2cd37743bcc7ea3bd405ce6d91e79e5339d7642e",
+      "bucket": "yes_no",
+      "question": "Do they report results only on English data?",
+      "baseline_answer": "no",
+      "candidate_answer": "no",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 0.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "tie": 2
+      },
+      "majority_preference": "tie",
+      "notes": [
+        "Both incorrectly answer \u201cno\u201d; gold answer is yes.",
+        "Both incorrectly say no; cited passages do not justify that claim."
+      ]
+    },
+    {
+      "question_id": "357eb9f0c07fa45e482d998a8268bd737beb827f",
+      "bucket": "citation_better",
+      "question": "What baseline models are used?",
+      "baseline_answer": "Pretrained models on Persona-Chat dataset (Kvmemnn, Feed Yourself, Poly-encoder, BERT bi-ranker)",
+      "candidate_answer": "Kvmemnn, Feed Yourself, Poly-encoder, BERT bi-ranker baseline",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 2.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 2.0,
+      "citation_quality_mean": 2.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "Both are correct; candidate is cleaner and directly supported by citation.",
+        "Both answers are correct; cited version is equally good and explicitly supported."
+      ]
+    },
+    {
+      "question_id": "384bf1f55c34b36cb03f916f50bbefade6c86a75",
+      "bucket": "large_disagreement",
+      "question": "Does their model suffer exhibit performance drops when incorporating word importance?",
+      "baseline_answer": "no",
+      "candidate_answer": "yes",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Gold says no; cited passages do not support performance drops.",
+        "Baseline matches gold; candidate flips answer and cites passages about usefulness, not drops."
+      ]
+    },
+    {
+      "question_id": "435570723b37ee1f5898c1a34ef86a0b2e8701bb",
+      "bucket": "baseline_better",
+      "question": "Which translation systems do they compare against?",
+      "baseline_answer": "The context compares against unweighted additive baseline models from previous work.",
+      "candidate_answer": "The unweighted additive baseline and additive models from previous work [BIBREF5, BIBREF23, BIBREF24] are compared against.",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 0.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Both miss the MT baselines; baseline is slightly less misleading.",
+        "Both answers target the wrong comparison setup; baseline is slightly less misleading."
+      ]
+    },
+    {
+      "question_id": "50be4a737dc0951b35d139f51075011095d77f2a",
+      "bucket": "baseline_better",
+      "question": "What background knowledge do they leverage?",
+      "baseline_answer": "Labeled features such as words indicating positive sentiment (e.g., amazing, exciting)",
+      "candidate_answer": "Leveraging labeled features such as words indicating positive sentiment (e.g., amazing, exciting) as prior knowledge in models.",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 2.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 2.0,
+      "citation_quality_mean": 2.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "Both are right; candidate\u2019s citation directly supports labeled features as prior knowledge.",
+        "Both correct; candidate is directly supported by cited passage."
+      ]
+    },
+    {
+      "question_id": "57f23dfc264feb62f45d9a9e24c60bd73d7fe563",
+      "bucket": "large_disagreement",
+      "question": "what is the size of the augmented dataset?",
+      "baseline_answer": "unanswerable",
+      "candidate_answer": "8.5 hours of total audio",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Baseline safely abstains; candidate confuses dataset description with augmentation size.",
+        "Baseline abstains; candidate cites unrelated DB/audio detail."
+      ]
+    },
+    {
+      "question_id": "692c9c5d9ff9cd3e0ce8b5e4fa68dda9bd23dec1",
+      "bucket": "citation_better",
+      "question": "How many users do they look at?",
+      "baseline_answer": "Over 20,000 blog users are looked at.",
+      "candidate_answer": "Over 20,000 blog users",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 2.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 1.0,
+      "citation_quality_mean": 1.0,
+      "preference_counts": {
+        "tie": 1,
+        "baseline": 1
+      },
+      "majority_preference": "tie",
+      "notes": [
+        "Both capture an acceptable count (\u201cover 20,000\u201d); candidate citations are only partly direct.",
+        "Both answers are acceptable, but candidate citations do not clearly support the count."
+      ]
+    },
+    {
+      "question_id": "7793805982354947ea9fc742411bec314a6998f6",
+      "bucket": "yes_no",
+      "question": "Are the annotations automatic or manually created?",
+      "baseline_answer": "unanswerable",
+      "candidate_answer": "no",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 0.5,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Question asks automatic vs manual; candidate \u201cno\u201d is wrong and less usable than abstention.",
+        "Gold says automatic; candidate \"no\" is not a correct answer and cites unrelated text."
+      ]
+    },
+    {
+      "question_id": "88bf368491f9613767f696f84b4bb1f5a7d7cb48",
+      "bucket": "yes_no",
+      "question": "Does the professional translation or the machine translation introduce the artifacts?",
+      "baseline_answer": "yes",
+      "candidate_answer": "yes",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 2.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 2.0,
+      "citation_quality_mean": 2.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "Both are correct; candidate cites the exact claim that both translation types introduce artifacts.",
+        "Both correct; candidate cites the exact claim that both human and MT introduce artifacts."
+      ]
+    },
+    {
+      "question_id": "8bb0011ad1d63996d5650770f3be18abdd9f7fc6",
+      "bucket": "large_disagreement",
+      "question": "Do they report results only on English datasets?",
+      "baseline_answer": "no",
+      "candidate_answer": "unanswerable",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 2.0,
+      "baseline_grounding_mean": 0.0,
+      "citation_grounding_mean": 1.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "\u201cUnanswerable\u201d is acceptable here; baseline \u201cno\u201d overcommits.",
+        "Baseline overclaims \"no\"; citation answer abstains, which is safer here."
+      ]
+    },
+    {
+      "question_id": "8d074aabf4f51c8455618c5bf7689d3f62c4da1d",
+      "bucket": "large_disagreement",
+      "question": "What are the limitations of existing Vietnamese word segmentation systems?",
+      "baseline_answer": "unanswerable",
+      "candidate_answer": "Existing Vietnamese word segmentation systems lack complete review approaches, datasets, and toolkits.",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 2.0,
+      "baseline_grounding_mean": 0.5,
+      "citation_grounding_mean": 2.0,
+      "citation_quality_mean": 2.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "Candidate matches one gold limitation and cites the right passage.",
+        "Candidate captures one gold limitation directly from cited text; baseline should not abstain."
+      ]
+    },
+    {
+      "question_id": "8e12b5c459fa963b3e549deadb864c244879fe82",
+      "bucket": "large_disagreement",
+      "question": "How many layers does their model have?",
+      "baseline_answer": "unanswerable",
+      "candidate_answer": "The model has 2 layers",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Baseline correctly marks missing info; candidate invents a 2-layer model.",
+        "Question appears unanswerable from provided evidence; candidate hallucinated 2 layers."
+      ]
+    },
+    {
+      "question_id": "a0543b4afda15ea47c1e623c7f00d4aaca045be0",
+      "bucket": "yes_no",
+      "question": "Can named entities in SnapCaptions be discontigious?",
+      "baseline_answer": "yes",
+      "candidate_answer": "yes",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 0.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "tie": 2
+      },
+      "majority_preference": "tie",
+      "notes": [
+        "Both answer \u201cyes\u201d despite gold allowing only no or unanswerable.",
+        "Both answers say yes despite BIO labeling suggesting contiguous entities only."
+      ]
+    },
+    {
+      "question_id": "a6d3e57de796172c236e33a6ceb4cca793dc2315",
+      "bucket": "large_disagreement",
+      "question": "What are the baselines?",
+      "baseline_answer": "unanswerable",
+      "candidate_answer": "Traditional summarization methods using features to rank sentences",
+      "baseline_correctness_mean": 2.0,
+      "citation_correctness_mean": 0.0,
+      "baseline_grounding_mean": 2.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Given missing setup details, baseline abstention is safer than generic baseline talk.",
+        "LEAD may be missing from available context; baseline abstention is safer than generic background."
+      ]
+    },
+    {
+      "question_id": "ce6a3ca102a5ee62e86fc7def3b20b1f10d1eb25",
+      "bucket": "yes_no",
+      "question": "Do they report results only on English data?",
+      "baseline_answer": "no",
+      "candidate_answer": "unanswerable",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 2.0,
+      "baseline_grounding_mean": 0.0,
+      "citation_grounding_mean": 1.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "citation": 2
+      },
+      "majority_preference": "citation",
+      "notes": [
+        "Gold allows unanswerable; candidate abstains while baseline overclaims.",
+        "Unanswerable is safer than baseline\u2019s unsupported \"no\"."
+      ]
+    },
+    {
+      "question_id": "cf171fad0bea5ab985c53d11e48e7883c23cdc44",
+      "bucket": "citation_better",
+      "question": "What details are given about the Twitter dataset?",
+      "baseline_answer": "unanswerable",
+      "candidate_answer": "The English Twitter dataset has nearly 1.6 million tweets annotated, with accuracies decreasing when utilizing polarity labels.",
+      "baseline_correctness_mean": 0.0,
+      "citation_correctness_mean": 1.0,
+      "baseline_grounding_mean": 0.0,
+      "citation_grounding_mean": 1.0,
+      "citation_quality_mean": 1.0,
+      "preference_counts": {
+        "baseline": 1,
+        "citation": 1
+      },
+      "majority_preference": "tie",
+      "notes": [
+        "Candidate includes one plausible dataset detail but also adds unsupported claims.",
+        "Candidate includes one valid dataset detail but adds unsupported claim about accuracies."
+      ]
+    },
+    {
+      "question_id": "e949b28f6d1f20e18e82742e04d68158415dc61e",
+      "bucket": "baseline_better",
+      "question": "What participating systems had better results than ones authors submitted?",
+      "baseline_answer": "The authors' submissions were ranked 3rd and 4th in FLC and SLC tasks, respectively, better than some participating systems.",
+      "candidate_answer": "Other systems ranked 2nd and 1st in FLC and SLC tasks, respectively.",
+      "baseline_correctness_mean": 1.0,
+      "citation_correctness_mean": 0.5,
+      "baseline_grounding_mean": 1.0,
+      "citation_grounding_mean": 0.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "baseline": 2
+      },
+      "majority_preference": "baseline",
+      "notes": [
+        "Baseline gives partial ranking info; candidate still omits the actual team names.",
+        "Neither names the systems; baseline at least reflects relative ranking more faithfully."
+      ]
+    },
+    {
+      "question_id": "f318a2851d7061f05a5b32b94251f943480fbd15",
+      "bucket": "citation_better",
+      "question": "What conclusions do the authors draw from their finding that the emotional appeal of ISIS and Catholic materials are similar?",
+      "baseline_answer": "Both ISIS and non-violent groups evoke similar emotions through topics about motherhood, spousal relationships, and marriage/divorce.",
+      "candidate_answer": "Both ISIS and non-violent groups evoke similar emotions related to motherhood, spousal relationships, and marriage/divorce in their materials targeting women.",
+      "baseline_correctness_mean": 0.5,
+      "citation_correctness_mean": 0.5,
+      "baseline_grounding_mean": 1.0,
+      "citation_grounding_mean": 1.0,
+      "citation_quality_mean": 0.0,
+      "preference_counts": {
+        "tie": 1,
+        "baseline": 1
+      },
+      "majority_preference": "tie",
+      "notes": [
+        "Both focus on shared topics, not the actual conclusion about inspiration/fear and insight.",
+        "Both conflate topic overlap with emotional-analysis conclusion; candidate citations are weak."
+      ]
+    }
+  ]
+}

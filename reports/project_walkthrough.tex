@@ -1,0 +1,351 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{verbatim}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+\setlist[itemize]{leftmargin=1.5em}
+\setlist[enumerate]{leftmargin=1.7em}
+\sloppy
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\fname}[1]{\path{#1}}
+
+\title{\textbf{QASPER RAG Project Walkthrough}}
+\author{CS505 NLP Final Project Team}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Project Overview}
+This project builds a \textbf{local, reproducible retrieval-augmented question answering system} for scientific papers using the \textbf{QASPER} dataset. The task is: given a paper and a question about that paper, retrieve the most relevant evidence passages and generate a grounded answer. In the citation-forcing setting, the system must also cite the retrieved evidence it claims to rely on.
+
+The system solves three linked subproblems:
+\begin{enumerate}
+  \item \textbf{Preprocessing and chunking:} convert raw scientific papers into stable, retrievable passages.
+  \item \textbf{Retrieval:} find the most relevant chunks for each question.
+  \item \textbf{Generation and grounding:} generate an answer, optionally with citations, and evaluate whether the answer is correct and whether the citations are actually supported.
+\end{enumerate}
+
+At a high level, the project:
+\begin{itemize}
+  \item preprocesses QASPER into canonical shared artifacts,
+  \item supports fixed, sliding-window, and section-aware chunking,
+  \item evaluates BM25, dense retrieval, hybrid retrieval, and reranking,
+  \item generates answers with local models such as Phi and Qwen,
+  \item evaluates answer quality, semantic similarity, grounding, and citation quality,
+  \item produces report-ready tables, analyses, and human-evaluation artifacts.
+\end{itemize}
+
+\section{Repository Structure}
+\subsection{Top-Level Layout}
+\begin{verbatim}
+NLP_research_project/
+  src/qasper_rag/              core library code
+  scripts/                     entrypoints, batch jobs, backfills, analysis
+  tests/                       unit and regression tests
+  reports/                     proposal, midway report, status report, artifacts
+  local_scc_results/           archived SCC outputs copied locally
+  README.md                    repo usage guide
+  setup_env.sh                 environment setup
+  environment.yml              conda environment spec
+\end{verbatim}
+
+\subsection{What Each Folder Is For}
+\begin{itemize}
+  \item \texttt{src/qasper\_rag/}: the actual implementation of loading, chunking, retrieval, generation, and evaluation.
+  \item \texttt{scripts/}: operational entrypoints used to build data, run experiments, submit SCC jobs, backfill metrics, analyze errors, and prepare human evaluation.
+  \item \texttt{tests/}: correctness checks for the main components and regression tests for tricky bugs.
+  \item \texttt{reports/}: LaTeX papers and supporting artifacts used for the proposal, midway report, and internal status tracking.
+  \item \texttt{local\_scc\_results/}: a persistent local mirror of important SCC outputs so experiment JSONs are not lost.
+\end{itemize}
+
+\section{File-by-File Guide}
+\subsection{Core Library Files}
+\scriptsize
+\begin{longtable}{L{0.15\textwidth} L{0.24\textwidth} L{0.27\textwidth} L{0.26\textwidth}}
+\toprule
+\textbf{File} & \textbf{Role} & \textbf{Key functions/classes} & \textbf{Connections} \\
+\midrule
+\endhead
+\fname{config.py} &
+Central path and layout resolver. &
+\fname{ChunkingSpec}, \fname{ProjectPaths}, \fname{get_default_project_paths()}, \fname{ensure_project_layout()}. &
+Used by almost every script to resolve SCC shared paths, per-user run paths, and local fallbacks. \\
+
+\fname{schema.py} &
+Normalized in-memory representation of raw QASPER. &
+\fname{QasperPaper}, \fname{QasperQuestion}, \fname{QasperAnswer}, \fname{Section}, \fname{TextUnit}, \fname{Chunk}. &
+Produced by \texttt{loader.py}; consumed by \texttt{chunking.py} and \texttt{processing.py}. \\
+
+\fname{loader.py} &
+Loads raw QASPER files or Hugging Face dataset records. &
+\fname{load_qasper_json()}, \fname{load_qasper_huggingface()}, \fname{resolve_qasper_split_path()}, \fname{parse_qasper_paper()}. &
+Feeds normalized paper/question/answer objects into \texttt{processing.py}. \\
+
+\fname{chunking.py} &
+Implements all chunking strategies. &
+\fname{BaseChunker}, \fname{FixedChunker}, \fname{SlidingWindowChunker}, \fname{SectionAwareChunker}, token-window helpers. &
+Called by \texttt{processing.py} to build retrievable chunk corpora. \\
+
+\fname{processing.py} &
+Builds canonical processed artifacts from raw QASPER. &
+\fname{build_processed_split()}, \fname{process_qasper_split_file()}, record serializers and JSONL writers. &
+Bridges raw input and the shared \fname{processed/} interface used by the rest of the pipeline. \\
+
+\fname{artifacts.py} &
+Loads processed artifacts back from disk. &
+\fname{ProcessedQuestion}, \fname{ProcessedChunk}, \fname{load_processed_questions()}, \fname{load_processed_chunks()}, \fname{group_chunks_by_paper()}. &
+Used by retrieval and generation runners. \\
+
+\fname{retrieval.py} &
+Implements the retrieval stack. &
+\fname{BM25Retriever}, \fname{DenseRetriever}, \fname{HybridRetriever}, \fname{CrossEncoderReranker}, \fname{RerankRetriever}, \fname{NullRetriever}, \fname{RandomRetriever}, \fname{build_retriever()}. &
+Used by both retrieval-only and retrieval+generation experiments. \\
+
+\fname{retrieval_eval.py} &
+Evaluates retrieval quality against QASPER evidence. &
+\fname{QuestionRetrievalMetrics}, \fname{evaluate_ranked_chunks()}, \fname{aggregate_question_metrics()}, evidence matching helpers. &
+Used by \fname{evaluate_qasper_retrieval.py}. \\
+
+\fname{generation.py} &
+Builds prompts, runs local generation, parses citations, normalizes outputs. &
+\fname{PromptPackage}, \fname{GenerationPrediction}, \fname{HuggingFaceGenerator}, \fname{build_prompt()}, \fname{prepare_prompt_chunks()}, \fname{normalize_generation_answer()}, \fname{build_generation_prediction()}. &
+Central generation logic used by the generation runner. \\
+
+\fname{generation_eval.py} &
+Evaluates answer quality and grounding. &
+\fname{QuestionGenerationMetrics}, \fname{token_f1_score()}, \fname{collect_gold_answers()}, \fname{evaluate_generation_prediction()}, \fname{aggregate_generation_metrics()}. &
+Used during generation experiments and in metric backfills. \\
+
+\fname{nli_eval.py} &
+Checks whether cited claims are supported by evidence. &
+\fname{HuggingFaceEntailmentScorer}, \fname{CitedClaim}, \fname{extract_cited_claims()}, \fname{evaluate_cited_claims()}. &
+Used for NLI citation backfill and citation verification. \\
+
+\fname{citation_verifier.py} &
+New verifier gate for citation-forcing outputs. &
+\fname{verify_citation_prediction()}. &
+Called inside the generation runner to keep only supported cited claims or abstain to \fname{unanswerable}. \\
+
+\fname{__init__.py} &
+Package export surface. &
+Re-exports the main classes and functions. &
+Makes imports cleaner in scripts and tests. \\
+\bottomrule
+\end{longtable}
+\normalsize
+
+\subsection{Important Script Files}
+\scriptsize
+\begin{longtable}{L{0.19\textwidth} L{0.27\textwidth} L{0.42\textwidth}}
+\toprule
+\textbf{File} & \textbf{Role} & \textbf{What it is used for} \\
+\midrule
+\endhead
+\fname{build_qasper_processed.py} & Processed data builder & Generates canonical \fname{papers.jsonl}, \fname{questions.jsonl}, \fname{chunks.*.jsonl}, and \fname{manifest.json}. \\
+\fname{evaluate_qasper_retrieval.py} & Retrieval runner & Runs retrieval-only experiments and writes retrieval JSON outputs. \\
+\fname{evaluate_qasper_generation.py} & Generation runner & Runs retrieval + generation + evaluation end-to-end; now also supports citation verification. \\
+\fname{qsub_qasper_retrieval.sh} & SCC batch wrapper & Runs retrieval jobs on SCC. \\
+\fname{qsub_qasper_generation.sh} & SCC batch wrapper & Runs generation jobs on SCC with model, retrieval, and citation-verifier flags. \\
+\fname{submit_proposal_ablation.sh} & Proposal batch chain & Submits the Phi A--E experiment chain. \\
+\fname{submit_proposal_baselines.sh} & Baseline batch chain & Submits parametric-only, BM25-only, and random-retrieval baselines. \\
+\fname{submit_full_validation_phi.sh} & Full-validation runner & Submits the strongest Phi settings on full validation. \\
+\fname{submit_full_validation_ab.sh} & Full-validation runner & Submits full-validation A and B to complete the proposal matrix. \\
+\fname{backfill_bertscore.py} & Metric backfill & Adds BERTScore to existing generation JSONs without rerunning generation. \\
+\fname{backfill_nli_citation.py} & Metric backfill & Adds NLI citation metrics to existing generation JSONs. \\
+\fname{analyze_generation_errors.py} & Error analysis & Groups generation failures into categories such as retrieval misses and unsupported citations. \\
+\fname{compare_generation_runs.py} & Run comparison & Compares two saved generation runs on overlapping questions. \\
+\fname{summarize_generation_runs.py} & Result packaging & Builds markdown tables from saved result JSONs. \\
+\fname{prepare_human_eval_sample.py} & Human-eval preparation & Builds an enriched reviewer sample with gold answers, evidence, cited chunk text, and NLI claim hints. \\
+\fname{create_human_eval_template.py} & Human-eval preparation & Turns a sample CSV into fillable reviewer templates. \\
+\fname{aggregate_human_eval.py} & Human-eval aggregation & Merges completed reviewer CSVs into summary tables and JSON. \\
+\fname{preview_qasper_chunking.py} & Debugging/sanity check & Lets the team inspect chunking behavior for a small paper subset. \\
+\fname{prepare_shared_qasper.sh} & Dataset setup & Downloads and extracts public QASPER archives into the shared SCC directory. \\
+\fname{pull_scc_results.sh} & Result archival & Safely copies SCC \fname{runs/} and \fname{logs/} locally without deleting the remote copies. \\
+\fname{show_project_paths.py} & Debugging & Prints the resolved SCC/local path layout. \\
+\fname{install_bertscore_overlay.sh} & SCC support utility & Installs a project-local overlay for BERTScore dependencies. \\
+\fname{install_qwen3_overlay.sh} & SCC support utility & Installs a project-local transformers overlay needed for Qwen3. \\
+\bottomrule
+\end{longtable}
+\normalsize
+
+\subsection{Reports, Tests, and Artifacts}
+\begin{itemize}
+  \item \texttt{reports/proposal.tex}: original project proposal.
+  \item \texttt{reports/midway\_report.tex}: ACL-formatted midway report.
+  \item \texttt{reports/status\_report.tex}: internal running status report with the latest experiment state.
+  \item \texttt{reports/references.bib}: shared bibliography.
+  \item \texttt{reports/artifacts/final\_validation\_results.md}: final consolidated full-validation generation table.
+  \item \texttt{reports/artifacts/citation\_tuning\_results.md}: tracked citation-tuning sample results.
+  \item \texttt{reports/artifacts/human\_eval\_*}: reviewer sample, templates, instructions, and aggregated human-evaluation summary.
+  \item \texttt{tests/test\_*.py}: unit and regression tests covering loading, chunking, retrieval, generation, NLI, configuration, and citation verification.
+\end{itemize}
+
+\section{Overall Workflow}
+\subsection{From Input to Output}
+\begin{enumerate}
+  \item \textbf{Prepare raw QASPER data.} The project downloads and extracts the train/dev/test QASPER files.
+  \item \textbf{Normalize papers and questions.} Raw papers, questions, answers, and evidence are parsed into a consistent internal schema.
+  \item \textbf{Chunk papers.} Each paper is split into retrievable units using fixed-size, sliding-window, or section-aware chunking.
+  \item \textbf{Write canonical processed artifacts.} These become the shared interface for all later experiments.
+  \item \textbf{Run retrieval.} For each question, the system retrieves top chunks using BM25, dense retrieval, hybrid fusion, or reranking.
+  \item \textbf{Build a prompt from retrieved chunks.} Retrieved chunks are compressed into the prompt context and labeled so the model can cite them.
+  \item \textbf{Generate an answer.} The model produces either a baseline answer or a citation-forcing answer.
+  \item \textbf{Normalize and parse the output.} The system extracts citations, cleans the answer, and normalizes cases like \texttt{yes}, \texttt{no}, and \texttt{unanswerable}.
+  \item \textbf{Verify citations (new step).} In verifier mode, cited claims are checked with NLI. Unsupported cited outputs can be collapsed to \texttt{unanswerable}.
+  \item \textbf{Evaluate.} Retrieval metrics, token F1, BERTScore, support rate, citation precision, and NLI citation precision are computed.
+  \item \textbf{Archive and summarize.} SCC results are copied locally, summarized into markdown tables, and used for reports and human evaluation.
+\end{enumerate}
+
+\section{Results and Outputs}
+\subsection{Retrieval Results}
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Recall@5} & \textbf{MRR@10} & \textbf{Evidence Hit} \\
+\midrule
+BM25 & 0.5769 & 0.4110 & 0.7152 \\
+Dense & 0.5886 & 0.4820 & 0.7238 \\
+Hybrid & 0.6313 & 0.5097 & 0.7778 \\
+Hybrid + rerank & 0.6410 & 0.5027 & 0.7702 \\
+\bottomrule
+\end{tabular}
+\caption{Validation retrieval results on section-aware chunks.}
+\end{table}
+
+Interpretation:
+\begin{itemize}
+  \item Hybrid retrieval is the best balanced retriever.
+  \item Reranking improves recall slightly, but that gain does not automatically translate into the best downstream generation quality.
+\end{itemize}
+
+\subsection{Full-Validation Generation Results}
+\begin{table}[h]
+\centering
+\scriptsize
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{Cond.} & \textbf{Chunking} & \textbf{Retrieval} & \textbf{Prompt} & \textbf{F1} & \textbf{BERT} & \textbf{Halluc.} & \textbf{Support} & \textbf{NLI Cite} \\
+\midrule
+A & fixed & dense & baseline & 0.3059 & 0.8791 & 0.5134 & 0.6886 & 0.0000 \\
+B & fixed & hybrid & baseline & 0.3063 & 0.8782 & 0.5104 & 0.6716 & 0.0000 \\
+C & section & hybrid & baseline & 0.3197 & 0.8815 & 0.4527 & 0.7741 & 0.0000 \\
+D & section & hybrid\_rerank & baseline & \textbf{0.3238} & 0.8817 & \textbf{0.4478} & 0.7652 & 0.0000 \\
+E & section & hybrid\_rerank & citation & 0.3215 & \textbf{0.8819} & 0.5463 & 0.5960 & 0.1416 \\
+P & section & none & baseline & 0.1350 & 0.8329 & 0.8657 & 0.1343 & 0.0000 \\
+M & section & BM25 & baseline & 0.3207 & 0.8813 & 0.4716 & 0.7254 & 0.0000 \\
+\bottomrule
+\end{tabular}
+\caption{Main full-validation Phi results.}
+\end{table}
+
+What these mean:
+\begin{itemize}
+  \item \textbf{D is the best overall Phi setting.} Section-aware chunking plus hybrid retrieval with reranking and baseline prompting gives the best answer-quality and grounding balance.
+  \item \textbf{E is good at producing citations, but not at trustworthy attribution.} It cites very often, but many cited claims are not actually supported.
+  \item \textbf{P is much worse.} This shows retrieval is genuinely important; the model alone is not enough.
+  \item \textbf{Section-aware chunking matters.} The jump from A/B to C/D shows that structural chunking helps more than simply changing retriever type on fixed chunks.
+\end{itemize}
+
+\subsection{Human Evaluation}
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{System} & \textbf{Correctness} & \textbf{Grounding} & \textbf{Citation Quality} \\
+\midrule
+Baseline & 1.021 & 1.062 & -- \\
+Citation & 0.875 & 0.708 & 0.583 \\
+\bottomrule
+\end{tabular}
+\caption{Mean human-evaluation scores over 24 questions and 2 reviewers.}
+\end{table}
+
+Additional human-eval findings:
+\begin{itemize}
+  \item 24 questions were reviewed by 2 reviewers.
+  \item Exact preference agreement was 83.3\%.
+  \item Majority preference by question was split: 9 baseline, 9 citation, 6 tie.
+\end{itemize}
+
+Why this is significant:
+\begin{itemize}
+  \item Automatic metrics say baseline is stronger on correctness and grounding.
+  \item Human judgments agree baseline is generally safer, but citation answers are not uniformly disliked.
+  \item This means citation forcing is not useless, but it is not yet reliable enough to replace baseline as the main answer mode.
+\end{itemize}
+
+\section{Important Concepts and Design Decisions}
+\begin{itemize}
+  \item \textbf{Deterministic processed artifacts:} the team uses a shared \texttt{processed/} interface instead of rebuilding chunks differently on each machine.
+  \item \textbf{Custom chunking instead of LangChain:} this keeps chunk IDs, metadata, and chunk boundaries stable and reproducible.
+  \item \textbf{Hybrid retrieval:} combines sparse and dense retrieval using reciprocal-rank fusion.
+  \item \textbf{Question-aware context compression:} retrieved chunks are compressed to relevant sentences before prompting, to fit SCC memory limits and reduce irrelevant context.
+  \item \textbf{Two answer modes:} baseline prompting prioritizes answer quality, while citation forcing prioritizes explicit attribution.
+  \item \textbf{Multi-metric evaluation:} token F1, BERTScore, support rate, hallucination proxy, citation precision, and NLI citation precision each capture different failure modes.
+  \item \textbf{Move from prompt-only tuning to verification:} the new citation verifier is a deliberate shift from ``tell the model to cite'' toward ``check whether the cited claim is actually supported.''
+\end{itemize}
+
+\section{Limitations and Possible Improvements}
+\subsection{Current Limitations}
+\begin{itemize}
+  \item Citation forcing still produces many unsupported cited claims.
+  \item Token F1 is harsh and under-rewards semantically correct paraphrases.
+  \item Human evaluation is still small.
+  \item SCC scheduler/auth instability slowed iteration and some runs had to be retried.
+  \item Some optional proposal stretch items remain secondary rather than central.
+\end{itemize}
+
+\subsection{Best Improvements}
+\begin{itemize}
+  \item Run the new verifier-gated citation mode on SCC and compare it directly to the current citation baseline.
+  \item If the verifier helps, run it on full validation.
+  \item Push citation mode toward a more explicit \emph{generate $\rightarrow$ verify $\rightarrow$ cite} pipeline.
+  \item Add a second faithfulness metric only if it adds signal beyond the current NLI check.
+  \item Keep stretch-model experiments secondary until the final writeup is locked.
+\end{itemize}
+
+\section{Simple Layman Explanation}
+Imagine giving a long scientific paper to a student and asking, ``What baseline did they compare against?'' or ``Did they only test English?'' This project builds a system that tries to answer those questions automatically.
+
+It works in three stages:
+\begin{enumerate}
+  \item it cuts the paper into smaller pieces,
+  \item it searches those pieces to find the most relevant ones,
+  \item it uses a language model to answer the question based only on those pieces.
+\end{enumerate}
+
+We tested different ways of cutting the paper up, different ways of searching for the right evidence, and different ways of forcing the model to show where its answer came from.
+
+The main lesson is:
+\begin{itemize}
+  \item getting the right evidence matters a lot,
+  \item the best current version answers best when allowed to answer normally,
+  \item forcing the system to always add citations makes it cite more often, but those citations are not always truly trustworthy yet.
+\end{itemize}
+
+So in plain language, the project is a \textbf{research-paper question answering assistant} that already works reasonably well, but still needs a stronger evidence-checking step before its citations can be trusted.
+
+\end{document}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -17,6 +18,7 @@ from qasper_rag.artifacts import (
     resolve_processed_split_dir,
 )
 from qasper_rag.config import ensure_project_layout, get_default_project_paths
+from qasper_rag.citation_verifier import verify_citation_prediction
 from qasper_rag.generation import (
     HuggingFaceGenerator,
     build_generation_prediction,
@@ -29,6 +31,7 @@ from qasper_rag.generation_eval import (
     serialize_generation_metrics,
 )
 from qasper_rag.retrieval import CrossEncoderReranker, build_retriever
+from qasper_rag.nli_eval import HuggingFaceEntailmentScorer
 
 
 class PaperRetrieverCache:
@@ -137,6 +140,10 @@ def main() -> None:
     parser.add_argument("--reranker-model", type=str, default="cross-encoder/ms-marco-MiniLM-L-6-v2")
     parser.add_argument("--reranker-device", type=str, default=None)
     parser.add_argument("--generation-model", type=str, default="microsoft/Phi-3.5-mini-instruct")
+    parser.add_argument("--citation-verify", action="store_true")
+    parser.add_argument("--citation-verifier-model", type=str, default="cross-encoder/nli-deberta-v3-base")
+    parser.add_argument("--citation-verifier-device", type=str, default=None)
+    parser.add_argument("--citation-verifier-threshold", type=float, default=0.5)
     parser.add_argument("--max-new-tokens", type=int, default=128)
     parser.add_argument("--max-input-tokens", type=int, default=2048)
     parser.add_argument("--max-context-tokens", type=int, default=1200)
@@ -185,6 +192,12 @@ def main() -> None:
         args.generation_model,
         max_input_tokens=args.max_input_tokens,
     )
+    citation_scorer = None
+    if args.citation_verify and args.prompt_style == "citation_forcing":
+        citation_scorer = HuggingFaceEntailmentScorer(
+            args.citation_verifier_model,
+            device=args.citation_verifier_device,
+        )
 
     question_payloads = []
     question_metrics = []
@@ -212,18 +225,37 @@ def main() -> None:
             raw_output,
             model_name=args.generation_model,
         )
+        verification_payload = None
+        if citation_scorer is not None:
+            prediction, verification_payload = verify_citation_prediction(
+                question.question,
+                prompt,
+                prediction,
+                retrieved_chunks,
+                citation_scorer,
+                generation_output=raw_output,
+                threshold=args.citation_verifier_threshold,
+            )
         metrics = evaluate_generation_prediction(question, prediction, retrieved_chunks)
+        if verification_payload is not None:
+            metrics = replace(
+                metrics,
+                nli_citation_precision=float(verification_payload["nli_citation_precision"]),
+                nli_cited_sentence_count=int(verification_payload["nli_cited_sentence_count"]),
+                nli_supported_sentence_count=int(verification_payload["nli_supported_sentence_count"]),
+            )
         question_metrics.append(metrics)
-        question_payloads.append(
-            {
-                "question_id": question.question_id,
-                "paper_id": question.paper_id,
-                "question": question.question,
-                "prediction": serialize_generation_prediction(prediction),
-                "metrics": serialize_generation_metrics(metrics),
-                "retrieved_chunk_ids": [chunk.chunk_id for chunk in retrieved_chunks],
-            }
-        )
+        question_payload = {
+            "question_id": question.question_id,
+            "paper_id": question.paper_id,
+            "question": question.question,
+            "prediction": serialize_generation_prediction(prediction),
+            "metrics": serialize_generation_metrics(metrics),
+            "retrieved_chunk_ids": [chunk.chunk_id for chunk in retrieved_chunks],
+        }
+        if verification_payload is not None:
+            question_payload["nli_claim_results"] = verification_payload["claim_results"]
+        question_payloads.append(question_payload)
 
     summary = aggregate_generation_metrics(question_metrics)
     payload = {
@@ -239,6 +271,10 @@ def main() -> None:
         "reranker_model": args.reranker_model if args.retrieval_method.endswith("_rerank") else None,
         "reranker_device": args.reranker_device,
         "generation_model": args.generation_model,
+        "citation_verify": args.citation_verify,
+        "citation_verifier_model": args.citation_verifier_model if args.citation_verify else None,
+        "citation_verifier_device": args.citation_verifier_device if args.citation_verify else None,
+        "citation_verifier_threshold": args.citation_verifier_threshold if args.citation_verify else None,
         "max_new_tokens": args.max_new_tokens,
         "max_input_tokens": args.max_input_tokens,
         "max_context_tokens": args.max_context_tokens,

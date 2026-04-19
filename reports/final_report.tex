@@ -1,0 +1,214 @@
+\documentclass[11pt]{article}
+\usepackage{acl}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{url}
+
+\setlength\titlebox{6.5cm}
+
+\title{Final Report: Citation-Grounded Scientific QA with Local Retrieval-Augmented Generation}
+
+\author{
+  Jaswanth Pinnepu \\
+  Boston University \\
+  \texttt{jaswanth@bu.edu}
+  \And
+  Zukhriddin Fakhriddinov \\
+  Boston University \\
+  \texttt{zfmsai@bu.edu}
+  \And
+  Atharv Gulati \\
+  Boston University \\
+  \texttt{atharvg@bu.edu}
+  \And
+  Aayush Kumar \\
+  Boston University \\
+  \texttt{aayushks@bu.edu}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We study grounded scientific question answering with a fully local retrieval-augmented generation (RAG) pipeline on QASPER. Our goal is to separate retrieval failures from generation failures in a privacy-preserving setting that runs on Boston University SCC without external APIs. We implement fixed, sliding-window, and section-aware chunking; BM25, dense, hybrid, and reranked retrieval; baseline and citation-forcing prompting; BERTScore and NLI-based citation evaluation; and a small human study. On full validation, the strongest overall system is section-aware chunking with hybrid retrieval, reranking, and baseline prompting, which reaches token F1 0.3238, BERTScore 0.8817, hallucination rate 0.4478, and supported-answer rate 0.7652. Citation forcing achieves high citation rate (0.9274) but lower grounding, with citation precision 0.3230 and NLI citation precision 0.1416. Human evaluation shows higher correctness and grounding scores for the baseline system, while question-level preference between baseline and citation answers is split evenly with many ties. The main conclusion is that better retrieval and chunking produce larger gains than prompt-level citation forcing, and that explicit citations alone do not guarantee grounded attribution.
+\end{abstract}
+
+\section{Introduction}
+
+Hallucination remains the main failure mode of small local language models in evidence-heavy tasks. Scientific question answering is a useful setting for studying this problem because the answers should be traceable to paper content rather than world knowledge alone. We use QASPER \citep{dasigi2021qasper}, which provides research-paper questions, multiple gold answers, and gold evidence spans, allowing us to evaluate both retrieval and answer grounding.
+
+Our project asks two related questions. First, how much of answer quality is determined by retrieval quality rather than by the generator itself? Second, can citation forcing make answers more trustworthy without damaging usefulness too much? The project was designed around a fully local stack so that the complete pipeline can run on SCC and be reused in privacy-sensitive settings. This requirement influenced the model choices, context budgets, and evaluation design throughout the work.
+
+\section{Methods}
+
+\subsection{Data, Chunking, and Retrieval}
+
+We normalize QASPER into a shared internal schema for papers, questions, answers, evidence spans, and retrievable chunks. We implemented three chunking strategies: fixed-size chunks, sliding-window chunks, and section-aware chunks aligned to paper structure. The section-aware variant is important because QASPER papers already contain section boundaries, and many questions align naturally with section-level evidence.
+
+Our retrieval stack combines four standard IR components. BM25 \citep{robertson2009bm25} provides a sparse lexical baseline. Dense retrieval uses BGE-small embeddings \citep{xiao2023bge}. Hybrid retrieval fuses sparse and dense ranks with reciprocal-rank fusion \citep{cormack2009rrf}. The strongest retrieval configuration adds a cross-encoder reranker \citep{nogueira2019bert} on top of the hybrid shortlist. These choices let us separate lexical matching, semantic matching, and top-of-list reranking effects.
+
+\subsection{Generation and Evaluation}
+
+For generation we use \texttt{microsoft/Phi-3.5-mini-instruct} \citep{microsoft2024phi3} as the main model. We compare a baseline prompt against citation forcing, where the model is asked to attach bracketed citations to claims. We also ran side comparisons with \texttt{Qwen/Qwen2.5-7B-Instruct} \citep{qwen2024qwen25} and \texttt{Qwen/Qwen3-4B-Instruct-2507} \citep{qwen2025qwen3} under the same retrieval setup.
+
+The main retrieval metrics are Recall@5, MRR@10, and evidence hit rate. The main answer metrics are token F1, BERTScore, citation precision, citation rate, supported-answer rate, and a binary hallucination proxy. Token F1 follows QASPER's official lexical matching setup. BERTScore captures semantic similarity between prediction and gold references. Citation precision counts the fraction of cited chunks that match any gold evidence span. NLI citation precision is stricter: it measures the fraction of cited claim sentences that are entailed by at least one cited chunk according to a local entailment scorer. Supported-answer rate averages the binary \texttt{answer\_supported} signal, and the hallucination proxy marks an answer as non-hallucinated only when it has non-zero token F1 and is supported by evidence.
+
+\section{Experiments}
+
+Our core proposal experiments are the controlled A--E ablations. Condition A uses fixed chunks, dense retrieval, and baseline prompting. Condition B swaps dense retrieval for hybrid retrieval while keeping fixed chunks and the same generator prompt. Condition C keeps hybrid retrieval but moves from fixed chunks to section-aware chunks. Condition D adds reranking on top of C. Condition E keeps D's retrieval pipeline and changes only the prompt to citation forcing. We also evaluate two main baselines on full validation: parametric-only generation with no retrieval (P) and BM25-only retrieval (M). Random retrieval (R) was run on the 100-question sample as an additional sanity baseline but is not part of the full-validation main table.
+
+Beyond the proposal core, we ran two side experiments. First, we performed a 24-question, two-reviewer human evaluation comparing the strongest baseline Phi setting against the strongest citation-forcing Phi setting. Second, we compared Phi against two Qwen models on the same 100-question \texttt{hybrid\_rerank} sample. These model-comparison runs are informative but are treated as side experiments rather than the main causal ablation story.
+
+\section{Results}
+
+\subsection{Retrieval Quality}
+
+\begin{table}[H]
+\centering
+\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+Method & Recall@5 & MRR@10 & Evidence hit \\
+\midrule
+BM25 & 0.5769 & 0.4110 & 0.7152 \\
+Dense & 0.5886 & 0.4820 & 0.7238 \\
+Hybrid & 0.6313 & 0.5097 & 0.7778 \\
+Hybrid + rerank & 0.6410 & 0.5027 & 0.7702 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Validation retrieval results on section-aware chunks.}
+\label{tab:retrieval}
+\end{table}
+
+Hybrid retrieval gives the strongest overall retrieval balance, while reranking improves Recall@5 slightly but does not dominate all metrics. This already suggests that retrieval improvements are likely to matter more than generator-only changes, especially on an evidence-sensitive benchmark like QASPER.
+
+\subsection{Core Phi Results on Full Validation}
+
+\begin{table*}[t]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccc}
+\toprule
+Setting & Questions & Token F1 & BERTScore & Halluc. & Supported & Cite Prec. & NLI Cite \\
+\midrule
+A: fixed + dense + baseline & 1005 & 0.3059 & 0.8791 & 0.5134 & 0.6886 & -- & -- \\
+B: fixed + hybrid + baseline & 1005 & 0.3063 & 0.8782 & 0.5104 & 0.6716 & -- & -- \\
+C: section + hybrid + baseline & 1005 & 0.3197 & 0.8815 & 0.4527 & 0.7741 & -- & -- \\
+D: section + hybrid\_rerank + baseline & 1005 & \textbf{0.3238} & 0.8817 & \textbf{0.4478} & 0.7652 & -- & -- \\
+E: section + hybrid\_rerank + citation & 1005 & 0.3215 & \textbf{0.8819} & 0.5463 & 0.5960 & 0.3230 & 0.1416 \\
+P: parametric-only & 1005 & 0.1350 & 0.8329 & 0.8657 & 0.1343 & -- & -- \\
+M: BM25-only & 1005 & 0.3207 & 0.8813 & 0.4716 & 0.7254 & -- & -- \\
+\bottomrule
+\end{tabular}
+}
+\caption{Main full-validation results for the core Phi experiments and the two main baselines. Citation rate for E is 0.9274.}
+\label{tab:main}
+\end{table*}
+
+Table~\ref{tab:main} shows the clearest result of the project: section-aware chunking and stronger retrieval matter more than prompt-level citation forcing. Moving from fixed-chunk conditions A and B to section-aware conditions C and D improves both token F1 and grounding. The best overall Phi setting is D, which combines section-aware chunking, hybrid retrieval, reranking, and baseline prompting. Parametric-only generation performs much worse, which confirms that retrieval is essential rather than optional for this task. Citation forcing (E) nearly matches D on token F1 and BERTScore, but it loses heavily on grounding: hallucination rises, supported-answer rate falls, and NLI citation precision remains low. In practice, the model often learns to cite frequently without learning to cite faithfully.
+
+We also tested a verifier-gated follow-up in which cited claims were kept only if a local NLI scorer supported them; otherwise the system abstained. That variant collapsed on the same 100-question sample, reaching token F1 0.1836, citation precision 0.0408, citation rate 0.11, hallucination 0.79, supported-answer rate 0.83, and NLI citation precision 0.11. The failure mode was over-abstention: the verifier removed many unsupported claims, but it also removed too many useful answers. We therefore keep E as the best citation-producing variant and treat the verifier run as a negative result.
+
+Random retrieval was not rerun on full validation; on the original 100-question sample it achieved token F1 0.3257, hallucination 0.68, and supported-answer rate 0.46. We keep it outside the main full-validation table because it served as a sanity baseline rather than a core proposal condition.
+
+\subsection{Human Evaluation}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+Metric & Baseline & Citation \\
+\midrule
+Correctness (0--2) & 1.021 & 0.875 \\
+Grounding (0--2) & 1.062 & 0.708 \\
+Citation quality (0--2) & -- & 0.583 \\
+\midrule
+Majority preference by question & 9 & 9 \\
+Tie questions & \multicolumn{2}{c}{6} \\
+Reviewer agreement & \multicolumn{2}{c}{83.3\%} \\
+\bottomrule
+\end{tabular}
+\caption{Human evaluation on 24 questions with two reviewers. Scores use the rubric in which 2 is clearly correct/directly supported, 1 is partial, and 0 is wrong or unsupported.}
+\label{tab:human}
+\end{table}
+
+The human study complicates the purely automatic-metric story in a useful way. The baseline system receives higher mean correctness and grounding scores, which agrees with the automatic support and hallucination metrics. However, question-level preference is evenly split between baseline and citation answers, with many ties. This means citation forcing is not simply unusable; instead, it is inconsistent. In some cases the extra attribution helps reviewers trust a good answer, while in many others the cited answer is still weak or unsupported.
+
+\subsection{Side Model Comparison}
+
+\begin{table*}[t]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccc}
+\toprule
+Model & Prompt & Questions & Token F1 & Halluc. & Supported & Cite Prec. \\
+\midrule
+Phi-3.5-mini-instruct & Baseline & 100 & \textbf{0.3697} & \textbf{0.43} & 0.80 & -- \\
+Qwen2.5-7B-Instruct & Baseline & 100 & 0.2924 & 0.62 & \textbf{0.82} & -- \\
+Qwen3-4B-Instruct-2507 & Baseline & 100 & 0.3319 & \textbf{0.43} & 0.81 & -- \\
+\midrule
+Phi-3.5-mini-instruct & Citation & 100 & \textbf{0.3569} & 0.54 & \textbf{0.66} & 0.3528 \\
+Qwen2.5-7B-Instruct & Citation & 100 & 0.2869 & 0.73 & 0.63 & 0.2070 \\
+Qwen3-4B-Instruct-2507 & Citation & 100 & 0.3499 & \textbf{0.48} & 0.64 & \textbf{0.3892} \\
+\bottomrule
+\end{tabular}
+}
+\caption{Side model comparison on the same 100-question section + \texttt{hybrid\_rerank} sample. These runs are not part of the main A--E causal ablation and are reported as supporting evidence for model choice.}
+\label{tab:models}
+\end{table*}
+
+The side model comparison supports our choice of Phi as the main generator. Qwen2.5-7B underperforms badly on both baseline and citation settings despite being larger. Qwen3-4B is stronger than Qwen2.5 and gets close to Phi, especially in citation precision, but it still does not beat Phi clearly on the main baseline configuration. The clean interpretation is that the main story of the project is not ``which random local chat model wins,'' but rather that the best-performing local model still benefits more from retrieval and chunking improvements than from citation forcing alone.
+
+\subsection{Error Analysis}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+Category & D count & E count \\
+\midrule
+Retrieval miss & 291 & 291 \\
+Unsupported citation & 0 & 790 \\
+Lexical mismatch / paraphrase & 49 & 42 \\
+Overcautious \texttt{unanswerable} & 144 & 84 \\
+Grounding failure with evidence & 0 & 162 \\
+\bottomrule
+\end{tabular}
+\caption{Error categories for the strongest baseline setting D and the strongest citation-forcing setting E.}
+\label{tab:error}
+\end{table}
+
+The error analysis clarifies where the system still fails. Retrieval misses remain the dominant failure mode for both settings: when the right evidence never enters the prompt, generation cannot recover. The baseline system is comparatively conservative, which creates many overcautious \texttt{unanswerable} predictions but very few citation-specific failures. Citation forcing changes the profile completely. It does not reduce retrieval misses, but it introduces a large number of unsupported citations and a substantial grounding-failure category even when relevant evidence has been retrieved. We also see a non-trivial lexical-mismatch slice, where token F1 is low but BERTScore and support are high; these are cases where the answer is semantically close but phrased differently from the canonical gold answer.
+
+\section{Limitations and Remaining Work}
+
+The project is complete enough to support a final report, but a few limitations remain. First, citation forcing still underperforms the baseline on grounding, and the NLI citation precision makes that failure explicit. Our verifier-gated follow-up did not solve this problem: it reduced unsupported claims only by abstaining too aggressively, so answer quality and citation coverage both collapsed. Second, the human evaluation is intentionally small; it is useful as a qualitative check, but it is not large enough to replace automatic metrics. Third, the side model comparisons were run on the 100-question sample rather than full validation, because the main goal was model selection rather than expanding the core ablation matrix.
+
+The main practical implication is that future citation improvements should not rely on a simple post-generation gate alone. A stronger next step would be a generate--then-align pipeline that extracts supporting spans more precisely before citation formatting, or a better-calibrated verifier that distinguishes weak support from true contradiction. These are meaningful follow-ups, but they do not change the main conclusion of this report: the core contribution is already established by the full-validation Phi experiments.
+
+\section{Conclusion}
+
+The core proposal experiments are complete, and they support a clear conclusion. Better chunking and better retrieval produce larger and more reliable gains than prompt-level citation forcing. Section-aware chunking is better than fixed chunking, reranking improves the strongest baseline system, and retrieval is necessary at all: parametric-only generation collapses on QASPER. Citation forcing increases visible attribution behavior, but it does not yet yield reliably grounded answers, as shown by low NLI citation precision and the large unsupported-citation count. Human evaluation reinforces this picture: citation answers are sometimes preferred, but the baseline system is still stronger on average correctness and grounding.
+
+The project therefore succeeds on its main goal. We built a fully local, reproducible scientific QA pipeline on SCC, separated retrieval from generation effects through controlled ablations, and showed that the most practical path to reducing hallucination in this setting is improving evidence retrieval first and treating citation formatting as a secondary, harder problem.
+
+{\small
+\bibliographystyle{acl_natbib}
+\bibliography{references}
+}
+
+\end{document}

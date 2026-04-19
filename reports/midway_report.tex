@@ -9,6 +9,7 @@
 \usepackage{booktabs}
 \usepackage{amsmath}
 \usepackage{graphicx}
+\usepackage{float}
 
 \setlength\titlebox{6cm}
 
@@ -51,28 +52,36 @@ This project draws most directly on course material from the transformer and LLM
 
 We implemented a fully local RAG pipeline around QASPER. The data layer normalizes raw papers, questions, answers, and evidence into a shared internal schema. We then build deterministic processed splits in a shared SCC course directory so the entire team uses identical artifacts.
 
-For chunking, we implemented the three strategies proposed in our project plan: fixed-size chunks (256 tokens, 32 overlap), sliding-window chunks (512 tokens, 128 overlap), and section-aware chunks aligned to paper structure. For retrieval, we implemented BM25, dense retrieval with BGE-small \citep{xiao2023bge}, hybrid reciprocal-rank fusion, and hybrid retrieval with cross-encoder reranking. For generation, we use \texttt{microsoft/Phi-3.5-mini-instruct} \citep{microsoft2024phi3} with two prompt styles: baseline answering and citation forcing, where answers must explicitly cite retrieved passages. The evaluation pipeline measures token F1, BERTScore, citation precision/rate, NLI-based citation precision, hallucination rate, supported-answer rate, Recall@5, MRR@10, and evidence hit rate.
+For chunking, we implemented the three strategies proposed in our project plan: fixed-size chunks (256 tokens, 32 overlap), sliding-window chunks (512 tokens, 128 overlap), and section-aware chunks aligned to paper structure. Our retrieval stack combines four standard IR components. BM25 \citep{robertson2009bm25} is a sparse lexical ranker,
+\[
+\resizebox{\columnwidth}{!}{$
+\mathrm{BM25}(q,d)=\sum_{t\in q}\mathrm{IDF}(t)\frac{f(t,d)(k_1+1)}{f(t,d)+k_1\!\left(1-b+b\frac{|d|}{\overline{\mathrm{dl}}}\right)},
+$}
+\]
+which is simple and robust but can miss paraphrases and synonymy. Dense retrieval \citep{karpukhin2020dpr,xiao2023bge} embeds the query and chunk and scores them by cosine similarity,
+\[
+s_{\mathrm{dense}}(q,d)=\cos(e_q,e_d)=\frac{e_q^\top e_d}{\lVert e_q\rVert \lVert e_d\rVert},
+\]
+which better captures semantics but is more expensive and can retrieve topically similar yet non-evidential text. Hybrid retrieval fuses sparse and dense rankings with reciprocal-rank fusion \citep{cormack2009rrf},
+\[
+\mathrm{RRF}(d)=\sum_{m\in M}\frac{1}{k+\mathrm{rank}_m(d)},
+\]
+giving a practical balance between lexical and semantic matching. Our final retrieval stage is a cross-encoder reranker \citep{nogueira2019bert}, which jointly scores each query--chunk pair; it often improves the top few passages, but it is the slowest stage.
+
+For generation, we use the instruction-tuned checkpoint \texttt{microsoft/Phi-3.5-mini-instruct} \citep{microsoft2024phi3}, not a base Phi model. That design choice matters because the task requires explicit answer-format instructions such as yes/no/unanswerable normalization and optional citation formatting. We compare two prompt styles: baseline answering and citation forcing, where answers must cite retrieved passages. Several evaluation metrics were not covered directly in class, so we define them explicitly. If $c$ is the number of overlapping normalized answer tokens, token-level precision and recall are $P=c/|\hat{y}|$ and $R=c/|y|$, and token F1 is $2PR/(P+R)$. BERTScore uses contextual token alignments and reports the same precision/recall/F1 form over embedding matches rather than exact tokens. Retrieval Recall@5 is the fraction of gold evidence spans recovered in the top five chunks, $\mathrm{MRR}@10=1/r$ when the first matching evidence chunk appears at rank $r\le 10$ and $0$ otherwise, and evidence hit is a binary indicator that any gold evidence appears in the top five. Citation precision is $|C_{\mathrm{sup}}|/|C|$, where $C$ is the set of cited chunks and $C_{\mathrm{sup}}$ are the cited chunks matching any gold evidence span. NLI citation precision is $|S_{\mathrm{ent}}|/|S|$, where $S$ is the set of cited claim sentences and $S_{\mathrm{ent}}$ are the cited sentences entailed by at least one cited chunk. Supported-answer rate is the mean of the binary variable \texttt{answer\_supported}, and our hallucination proxy is the mean of $\mathbf{1}[\text{token F1}=0 \lor \texttt{answer\_supported}=0]$. For gold \texttt{unanswerable} questions, we explicitly mark an \texttt{unanswerable} prediction as supported.
 
 \subsection{Experiments}
 
-We completed the retrieval experiments on validation section chunks and then ran the proposal's core ablation conditions:
-\begin{itemize}
-    \item A: fixed chunking + dense retrieval + baseline prompting
-    \item B: fixed chunking + hybrid retrieval + baseline prompting
-    \item C: section-aware chunking + hybrid retrieval + baseline prompting
-    \item D: section-aware chunking + hybrid retrieval + reranking + baseline prompting
-    \item E: section-aware chunking + hybrid retrieval + reranking + citation forcing
-\end{itemize}
-
-We also added the proposal baselines: parametric-only generation (no retrieval), BM25-only retrieval, and random retrieval over five passages. All generation conditions above were first run on a 100-question validation sample to keep experiments comparable on SCC. After stabilizing the pipeline, we extended A--E, parametric-only, and BM25-only to the full 1005-question validation split and added an NLI-based citation scorer for citation-forcing runs. In addition, we ran exploratory model comparisons with Qwen2.5-7B and Qwen3-4B, but those are side experiments rather than the main midway result story.
+We completed the retrieval experiments on validation section chunks and then ran the proposal's core ablation conditions A--E as controlled, one-factor-at-a-time comparisons. Condition A starts from fixed chunking, dense retrieval, and baseline prompting. Condition B keeps fixed chunking and the same baseline prompt, but swaps dense retrieval for hybrid retrieval, isolating the effect of retrieval fusion. Condition C keeps hybrid retrieval and baseline prompting but replaces fixed chunks with section-aware chunks, isolating the value of paper structure. Condition D adds the cross-encoder reranker on top of C to test whether better top-of-list ordering improves generation. Condition E keeps D's retrieval pipeline and changes only the prompt to citation forcing, isolating the cost and benefit of explicit attribution. We also added the proposal baselines: parametric-only generation (no retrieval), BM25-only retrieval, and random retrieval over five passages. All generation conditions above were first run on a 100-question validation sample to keep experiments comparable on SCC. After stabilizing the pipeline, we extended A--E, parametric-only, and BM25-only to the full 1005-question validation split and added an NLI-based citation scorer for citation-forcing runs. In addition, we ran exploratory model comparisons with Qwen2.5-7B and Qwen3-4B, but those are side experiments rather than the main midway result story.
 
 \subsection{Results}
 
 Table~\ref{tab:retrieval} summarizes the retrieval-only experiments. Hybrid retrieval gives the best overall validation balance, while hybrid plus reranking improves Recall@5 slightly but does not dominate every metric.
 
-\begin{table}[t]
+\begin{table}[H]
 \centering
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lccc}
 \toprule
 Method & Recall@5 & MRR@10 & Evidence hit \\
@@ -83,15 +92,17 @@ Hybrid & 0.6313 & 0.5097 & 0.7778 \\
 Hybrid + rerank & 0.6410 & 0.5027 & 0.7702 \\
 \bottomrule
 \end{tabular}
+}
 \caption{Validation retrieval results on section-aware chunks.}
 \label{tab:retrieval}
 \end{table}
 
 Table~\ref{tab:core} shows the main A--E generation results. The strongest condition so far is C: section-aware chunking with hybrid retrieval and baseline prompting. Moving from fixed hybrid retrieval (B) to section-aware hybrid retrieval (C) gives the largest gain in the main table. Reranking (D) does not beat C on this 100-question sample, although it does slightly improve supported-answer rate. Citation forcing (E) produces citations very reliably, but still lowers answer quality and grounding relative to the strongest non-citation setting.
 
-\begin{table*}[t]
+\begin{table}[H]
 \centering
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcccccc}
 \toprule
 Cond. & Retrieval & Chunking & Prompt & Token F1 & BERTScore F1 & Halluc. \\
@@ -103,13 +114,14 @@ D & Hybrid + rerank & Section & Baseline & 0.3697 & 0.8910 & 0.43 \\
 E & Hybrid + rerank & Section & Citation & 0.3569 & 0.8871 & 0.54 \\
 \bottomrule
 \end{tabular}
+}
 \caption{Core proposal ablations on a 100-question validation sample. Condition E is the citation-forcing setting, while Condition C is the strongest non-citation condition in this table.}
 \label{tab:core}
-\end{table*}
+\end{table}
 
 Table~\ref{tab:baselines} gives the three extra baselines from the proposal. Parametric-only generation is much worse than any retrieval-based condition, which supports the central claim that retrieval materially reduces hallucination in this task. BM25-only performs better than random retrieval and nearly matches the weaker dense/hybrid ablations on this sample, while random retrieval remains clearly worse on grounding.
 
-\begin{table}[t]
+\begin{table}[H]
 \centering
 \small
 \resizebox{\columnwidth}{!}{%
@@ -131,7 +143,7 @@ One practical lesson from these experiments is that token F1 alone understates a
 
 Table~\ref{tab:nli-followup} summarizes the later full-validation follow-up on the strongest Phi settings. The best full-validation baseline is now D rather than C, but the overall story is unchanged: retrieval plus reranking helps the baseline system, while citation forcing still trades answer support for explicit attribution. The NLI-based citation result is especially important because it shows that many cited claims are still not actually entailed by the cited evidence. This confirms the error-analysis finding that explicit citation formatting alone is not enough to ensure grounded attribution.
 
-\begin{table}[t]
+\begin{table}[H]
 \centering
 \small
 \resizebox{\columnwidth}{!}{%
@@ -150,9 +162,9 @@ E full val. & 1005 & 0.3215 & 0.3230 & 0.9274 & 0.1416 \\
 
 \section{Project Plan}
 
-Before the final report, we plan to do four things. First, we will complete the remaining proposal evaluation pieces that are not yet finished at report quality: a local-judge faithfulness metric such as RAGAS \citep{es2023ragas}, a small manual error analysis, and a lightweight human evaluation pass. Second, we will finish consolidating the full-validation A--E table and supporting baselines into the final writeup. Third, we will decide whether any additional citation-tuning experiment is still justified now that the NLI citation check is available. Fourth, we will update the writeup to clearly separate our core Phi-based ablation story from the exploratory Qwen side experiments.
+Before the final report, we plan to do three things. First, we will consolidate the now-complete full-validation A--E table, the supporting baselines, and our completed small human-evaluation pass into the final writeup. Second, we will decide whether one additional verifier-gated citation experiment is justified now that the NLI citation check is available. Third, we will update the final report to clearly separate our core Phi-based ablation story from the exploratory Qwen side experiments.
 
-We also want to be explicit about what is not yet covered relative to the proposal and course scope. We have not yet run the proposal's stretch-generator conditions with Llama-3-8B or Mistral-7B. We also have not yet completed human evaluation or a local-judge faithfulness metric beyond the NLI-based attribution scorer. These missing pieces are not due to a conceptual shift in the project; they are deferred because the midway milestone was spent getting the local SCC pipeline, retrieval stack, full-validation Phi experiments, and attribution checks into a stable, reproducible state.
+We also want to be explicit about what is still outside the core proposal scope. We have not yet run the proposal's stretch-generator conditions with Llama-3-8B or Mistral-7B, and we have not yet added a second local faithfulness judge beyond the current NLI-based attribution scorer. These missing pieces are not due to a conceptual shift in the project; they are deferred because the main effort went into building a stable local SCC pipeline, completing the full-validation Phi ablations, and adding grounded-attribution evaluation.
 
 \section{Conclusion}
 
