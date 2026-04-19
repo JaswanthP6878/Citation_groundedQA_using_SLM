@@ -47,25 +47,31 @@ Hallucination remains the main failure mode of small local language models in ev
 
 Our project asks two related questions. First, how much of answer quality is determined by retrieval quality rather than by the generator itself? Second, can citation forcing make answers more trustworthy without damaging usefulness too much? The project was designed around a fully local stack so that the complete pipeline can run on SCC and be reused in privacy-sensitive settings. This requirement influenced the model choices, context budgets, and evaluation design throughout the work.
 
+The code, batch scripts, and report sources for the project are available at \url{https://github.com/JaswanthP6878/NLP_research_project}.
+
 \section{Methods}
 
 \subsection{Data, Chunking, and Retrieval}
 
 We normalize QASPER into a shared internal schema for papers, questions, answers, evidence spans, and retrievable chunks. We implemented three chunking strategies: fixed-size chunks, sliding-window chunks, and section-aware chunks aligned to paper structure. The section-aware variant is important because QASPER papers already contain section boundaries, and many questions align naturally with section-level evidence.
 
-Our retrieval stack combines four standard IR components. BM25 \citep{robertson2009bm25} provides a sparse lexical baseline. Dense retrieval uses BGE-small embeddings \citep{xiao2023bge}. Hybrid retrieval fuses sparse and dense ranks with reciprocal-rank fusion \citep{cormack2009rrf}. The strongest retrieval configuration adds a cross-encoder reranker \citep{nogueira2019bert} on top of the hybrid shortlist. These choices let us separate lexical matching, semantic matching, and top-of-list reranking effects.
+Our retrieval stack combines four standard IR components. BM25 \citep{robertson2009bm25} provides a sparse lexical baseline. Dense retrieval uses BGE-small embeddings \citep{xiao2023bge}. Hybrid retrieval fuses sparse and dense ranks with reciprocal-rank fusion \citep{cormack2009rrf}, where the fused score for chunk $c$ is
+\[
+\mathrm{RRF}(c)=\sum_{m \in \{\mathrm{bm25},\mathrm{dense}\}} \frac{1}{k+\mathrm{rank}_m(c)}
+\]
+with fusion constant $k$. The strongest retrieval configuration adds a cross-encoder reranker \citep{nogueira2019bert} on top of the hybrid shortlist. These choices let us separate lexical matching, semantic matching, and top-of-list reranking effects.
 
 \subsection{Generation and Evaluation}
 
 For generation we use \texttt{microsoft/Phi-3.5-mini-instruct} \citep{microsoft2024phi3} as the main model. We compare a baseline prompt against citation forcing, where the model is asked to attach bracketed citations to claims. We also ran side comparisons with \texttt{Qwen/Qwen2.5-7B-Instruct} \citep{qwen2024qwen25} and \texttt{Qwen/Qwen3-4B-Instruct-2507} \citep{qwen2025qwen3} under the same retrieval setup.
 
-The main retrieval metrics are Recall@5, MRR@10, and evidence hit rate. The main answer metrics are token F1, BERTScore, citation precision, citation rate, supported-answer rate, and a binary hallucination proxy. Token F1 follows QASPER's official lexical matching setup. BERTScore captures semantic similarity between prediction and gold references. Citation precision counts the fraction of cited chunks that match any gold evidence span. NLI citation precision is stricter: it measures the fraction of cited claim sentences that are entailed by at least one cited chunk according to a local entailment scorer. Supported-answer rate averages the binary \texttt{answer\_supported} signal, and the hallucination proxy marks an answer as non-hallucinated only when it has non-zero token F1 and is supported by evidence.
+The main retrieval metrics are Recall@5, MRR@10, and evidence hit rate. The main answer metrics are token F1, BERTScore, citation precision, citation rate, supported-answer rate, and a binary hallucination proxy. Since several of these were not covered directly in class, we define them explicitly. For normalized gold answer $y$ and prediction $\hat{y}$ with overlapping token count $c$, token-level precision and recall are $P=c/|\hat{y}|$ and $R=c/|y|$, and token F1 is $2PR/(P+R)$. For retrieval, $\mathrm{Recall@5}$ is the fraction of gold evidence spans recovered in the top five chunks, and $\mathrm{MRR@10}=1/r$ when the first matching evidence chunk appears at rank $r\le 10$ and $0$ otherwise. Citation precision is $\lvert C_{\mathrm{sup}}\rvert / \lvert C\rvert$, where $C$ is the set of cited chunks and $C_{\mathrm{sup}}$ are the cited chunks matching gold evidence. NLI citation precision is $\lvert S_{\mathrm{ent}}\rvert / \lvert S\rvert$, where $S$ is the set of cited claim sentences and $S_{\mathrm{ent}}$ are the cited sentences entailed by at least one cited chunk. Supported-answer rate is the mean of the binary variable \texttt{answer\_supported}, and our hallucination proxy is $\mathbf{1}[\text{token F1}=0 \lor \texttt{answer\_supported}=0]$. BERTScore captures semantic similarity through contextual token alignment rather than exact lexical overlap.
 
 \section{Experiments}
 
 Our core proposal experiments are the controlled A--E ablations. Condition A uses fixed chunks, dense retrieval, and baseline prompting. Condition B swaps dense retrieval for hybrid retrieval while keeping fixed chunks and the same generator prompt. Condition C keeps hybrid retrieval but moves from fixed chunks to section-aware chunks. Condition D adds reranking on top of C. Condition E keeps D's retrieval pipeline and changes only the prompt to citation forcing. We also evaluate two main baselines on full validation: parametric-only generation with no retrieval (P) and BM25-only retrieval (M). Random retrieval (R) was run on the 100-question sample as an additional sanity baseline but is not part of the full-validation main table.
 
-Beyond the proposal core, we ran two side experiments. First, we performed a 24-question, two-reviewer human evaluation comparing the strongest baseline Phi setting against the strongest citation-forcing Phi setting. Second, we compared Phi against two Qwen models on the same 100-question \texttt{hybrid\_rerank} sample. These model-comparison runs are informative but are treated as side experiments rather than the main causal ablation story.
+Beyond the proposal core, we ran two side experiments. First, we performed a 24-question, two-reviewer human evaluation comparing the strongest baseline Phi setting against the strongest citation-forcing Phi setting. Second, we compared Phi against two Qwen models on the same 100-question \texttt{hybrid\_rerank} sample and later added baseline-only stretch checks with Llama-3-8B-Instruct and Mistral-7B-Instruct. These model-comparison runs are informative but are treated as side experiments rather than the main causal ablation story.
 
 \section{Results}
 
@@ -170,7 +176,7 @@ Qwen3-4B-Instruct-2507 & Citation & 100 & 0.3499 & \textbf{0.48} & 0.64 & \textb
 \label{tab:models}
 \end{table*}
 
-The side model comparison supports our choice of Phi as the main generator. Qwen2.5-7B underperforms badly on both baseline and citation settings despite being larger. Qwen3-4B is stronger than Qwen2.5 and gets close to Phi, especially in citation precision, but it still does not beat Phi clearly on the main baseline configuration. The clean interpretation is that the main story of the project is not ``which random local chat model wins,'' but rather that the best-performing local model still benefits more from retrieval and chunking improvements than from citation forcing alone.
+The initial side model comparison supports our choice of Phi as the main generator. Qwen2.5-7B underperforms badly on both baseline and citation settings despite being larger. Qwen3-4B is stronger than Qwen2.5 and gets close to Phi, especially in citation precision, but it still does not beat Phi clearly on the main baseline configuration. We later extended the baseline-only stretch comparison to Llama-3-8B-Instruct and Mistral-7B-Instruct on the same \texttt{hybrid\_rerank} setup. On the 100-question sample, Llama reached token F1 0.3545, BERTScore 0.8850, hallucination 0.43, and supported-answer rate 0.82, making it the only stretch model genuinely close to Phi. Mistral underperformed, with token F1 0.2878, BERTScore 0.8719, hallucination 0.48, and supported-answer rate 0.82. We then promoted only Llama to full validation, where it reached token F1 0.3249, BERTScore 0.8801, hallucination 0.4537, and supported-answer rate 0.7552. That full-validation result is essentially a tie with the strongest Phi baseline rather than a clear win, so the main conclusion does not change: the strongest local model still benefits more from retrieval and chunking improvements than from continued generator swapping.
 
 \subsection{Error Analysis}
 
@@ -196,7 +202,7 @@ The error analysis clarifies where the system still fails. Retrieval misses rema
 
 \section{Limitations and Remaining Work}
 
-The project is complete enough to support a final report, but a few limitations remain. First, citation forcing still underperforms the baseline on grounding, and the NLI citation precision makes that failure explicit. Our verifier-gated follow-up did not solve this problem: it reduced unsupported claims only by abstaining too aggressively, so answer quality and citation coverage both collapsed. Second, the human evaluation is intentionally small; it is useful as a qualitative check, but it is not large enough to replace automatic metrics. Third, the side model comparisons were run on the 100-question sample rather than full validation, because the main goal was model selection rather than expanding the core ablation matrix.
+The project is complete enough to support a final report, but a few limitations remain. First, citation forcing still underperforms the baseline on grounding, and the NLI citation precision makes that failure explicit. Our verifier-gated follow-up did not solve this problem: it reduced unsupported claims only by abstaining too aggressively, so answer quality and citation coverage both collapsed. Second, the human evaluation is intentionally small; it is useful as a qualitative check, but it is not large enough to replace automatic metrics. Third, most side model comparisons were run on a 100-question sample rather than full validation; we promoted only the strongest stretch model, Llama, to full validation.
 
 The main practical implication is that future citation improvements should not rely on a simple post-generation gate alone. A stronger next step would be a generate--then-align pipeline that extracts supporting spans more precisely before citation formatting, or a better-calibrated verifier that distinguishes weak support from true contradiction. These are meaningful follow-ups, but they do not change the main conclusion of this report: the core contribution is already established by the full-validation Phi experiments.
 
@@ -205,6 +211,12 @@ The main practical implication is that future citation improvements should not r
 The core proposal experiments are complete, and they support a clear conclusion. Better chunking and better retrieval produce larger and more reliable gains than prompt-level citation forcing. Section-aware chunking is better than fixed chunking, reranking improves the strongest baseline system, and retrieval is necessary at all: parametric-only generation collapses on QASPER. Citation forcing increases visible attribution behavior, but it does not yet yield reliably grounded answers, as shown by low NLI citation precision and the large unsupported-citation count. Human evaluation reinforces this picture: citation answers are sometimes preferred, but the baseline system is still stronger on average correctness and grounding.
 
 The project therefore succeeds on its main goal. We built a fully local, reproducible scientific QA pipeline on SCC, separated retrieval from generation effects through controlled ablations, and showed that the most practical path to reducing hallucination in this setting is improving evidence retrieval first and treating citation formatting as a secondary, harder problem.
+
+\section*{Author Contributions}
+
+Jaswanth Pinnepu coordinated the project direction, helped define the experiment comparisons, and contributed to writing and revising the reports. Zukhriddin Fakhriddinov implemented the main SCC pipeline, evaluation utilities, and experiment runs, and maintained the reproducible artifacts and codebase.
+
+Atharv Gulati contributed to result analysis, human-evaluation review, and report revision. Aayush Kumar contributed to experiment review, discussion of failure modes and metrics, and report editing.
 
 {\small
 \bibliographystyle{acl_natbib}
