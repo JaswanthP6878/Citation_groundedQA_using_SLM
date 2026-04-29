@@ -53,6 +53,12 @@ Our project asks two related questions. First, how much of answer quality is det
 
 The code, batch scripts, and report sources for the project are available at \url{https://github.com/JaswanthP6878/NLP_research_project}.
 
+\section{Related Work}
+
+Retrieval-augmented generation was introduced as a way to improve knowledge-intensive NLP by giving generators access to retrieved evidence rather than relying only on model parameters \citep{lewis2020rag}. Dense passage retrieval made neural retrieval a practical alternative to purely lexical matching \citep{karpukhin2020dpr}, while scientific QA benchmarks such as QASPER evaluate whether systems can answer questions grounded in research papers \citep{dasigi2021qasper}. Recent scientific RAG work extends this direction to literature search and multi-paper synthesis \citep{ajith2024litsearch,lala2023paperqa}. Our project is narrower but more controlled: instead of building a broad literature assistant, we isolate how chunking, retrieval, reranking, and prompting affect grounded QA on one benchmark.
+
+Citation-aware generation is closely related to attribution and faithfulness evaluation. ALCE studies whether LLMs can answer with citations and proposes automatic citation-quality metrics \citep{gao2023alce}, while AIS frames attribution as whether generated claims are supported by identified sources \citep{rashkin2023ais}. RAG evaluation frameworks such as RAGAS and ARES similarly separate retrieval quality from answer faithfulness and relevance \citep{es2023ragas,saadfalcon2024ares}. Our evaluation follows this line of work, but emphasizes a fully local SCC pipeline, gold-evidence retrieval metrics, NLI citation checks, and a small human study to test whether automatic metrics align with reviewer judgments.
+
 \section{Methods}
 
 \subsection{Data, Chunking, and Retrieval}
