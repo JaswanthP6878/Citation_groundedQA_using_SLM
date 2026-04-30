@@ -180,14 +180,18 @@ Qwen3-4B-Instruct-2507 & Baseline & 100 & 0.3319 & \textbf{0.43} & 0.81 & -- \\
 Phi-3.5-mini-instruct & Citation & 100 & \textbf{0.3569} & 0.54 & \textbf{0.66} & 0.3528 \\
 Qwen2.5-7B-Instruct & Citation & 100 & 0.2869 & 0.73 & 0.63 & 0.2070 \\
 Qwen3-4B-Instruct-2507 & Citation & 100 & 0.3499 & \textbf{0.48} & 0.64 & \textbf{0.3892} \\
+\midrule
+Llama-3-8B-Instruct & Baseline & 100 & 0.3545 & \textbf{0.43} & \textbf{0.82} & -- \\
+Mistral-7B-Instruct-v0.3 & Baseline & 100 & 0.2878 & 0.48 & \textbf{0.82} & -- \\
+Llama-3-8B-Instruct (full val.) & Baseline & 1005 & 0.3249 & 0.4537 & 0.7552 & -- \\
 \bottomrule
 \end{tabular}
 }
-\caption{Side model comparison on the same 100-question section + \texttt{hybrid\_rerank} sample. These runs are not part of the main A--E causal ablation and are reported as supporting evidence for model choice.}
+\caption{Side model and stretch-generator comparison under section + \texttt{hybrid\_rerank}. Most rows use the same 100-question sample; the final Llama row is the promoted full-validation stretch run.}
 \label{tab:models}
 \end{table*}
 
-The initial side model comparison supports our choice of Phi as the main generator. Qwen2.5-7B underperforms badly on both baseline and citation settings despite being larger. Qwen3-4B is stronger than Qwen2.5 and gets close to Phi, especially in citation precision, but it still does not beat Phi clearly on the main baseline configuration. We later extended the baseline-only stretch comparison to Llama-3-8B-Instruct and Mistral-7B-Instruct on the same \texttt{hybrid\_rerank} setup. On the 100-question sample, Llama reached token F1 0.3545, BERTScore 0.8850, hallucination 0.43, and supported-answer rate 0.82, making it the only stretch model genuinely close to Phi. Mistral underperformed, with token F1 0.2878, BERTScore 0.8719, hallucination 0.48, and supported-answer rate 0.82. We then promoted only Llama to full validation, where it reached token F1 0.3249, BERTScore 0.8801, hallucination 0.4537, and supported-answer rate 0.7552. That full-validation result is essentially a tie with the strongest Phi baseline rather than a clear win, so the main conclusion does not change: the strongest local model still benefits more from retrieval and chunking improvements than from continued generator swapping.
+The side model comparison supports our choice of Phi as the main generator. Qwen2.5-7B underperforms badly on both baseline and citation settings despite being larger. Qwen3-4B is stronger than Qwen2.5 and gets close to Phi, especially in citation precision, but it still does not beat Phi clearly on the main baseline configuration. We later extended the baseline-only stretch comparison to Llama-3-8B-Instruct and Mistral-7B-Instruct on the same setup. Llama was the only stretch model genuinely close to Phi on the 100-question sample, so we promoted it to full validation. Its full-validation result is essentially a tie with the strongest Phi baseline rather than a clear win, so the main conclusion does not change: the strongest local model still benefits more from retrieval and chunking improvements than from continued generator swapping.
 
 \subsection{Error Analysis}
 
